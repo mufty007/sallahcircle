@@ -3,14 +3,14 @@ import { View } from 'react-native';
 
 import { RoundBtn } from '@/components/ui/primitives';
 import { T } from '@/components/ui/text';
-import { useAppState } from '@/state/app-state';
+import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
 /** Back button, 5-step progress bar and optional Skip. */
 export function OBTop({ step, total = 5, skipTo }: { step: number; total?: number; skipTo?: Href }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, height: 40 }}>
-      <RoundBtn n="back" bg="rgba(255,255,255,0.08)" onPress={() => router.back()} />
+      <RoundBtn n="back" bg="rgba(255,255,255,0.08)" onPress={() => router.canGoBack() && router.back()} />
       <View style={{ flex: 1, flexDirection: 'row', gap: 6 }}>
         {Array.from({ length: total }).map((_, i) => (
           <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i < step ? SC.mint : 'rgba(255,255,255,0.14)' }} />
@@ -38,6 +38,6 @@ export function OBHead({ k, t, sub, style }: { k?: string; t: string; sub?: stri
  * (user already onboarded) the primary button just returns.
  */
 export function useSetupNext() {
-  const { onboarded } = useAppState();
+  const { onboarded } = useSession();
   return (href: Href) => (onboarded ? router.back() : router.push(href));
 }

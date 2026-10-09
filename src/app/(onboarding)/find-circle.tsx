@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { OBHead, OBTop } from '@/components/onboarding';
 import { Icon, type IconName } from '@/components/ui/icon';
@@ -8,15 +8,31 @@ import { Btn, Label, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { FEATURED_CIRCLE } from '@/data/mock';
+import { supabase } from '@/lib/supabase';
 import { mintA, SC } from '@/theme/colors';
 
 const LEN = 6;
 
 export default function FindCircleScreen() {
-  const [code, setCode] = useState('BGQB');
+  const params = useLocalSearchParams<{ code?: string }>();
+  const [code, setCode] = useState((params.code ?? '').replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 6));
   const [focused, setFocused] = useState(false);
   const input = useRef<TextInput>(null);
   const complete = code.length === LEN;
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const join = async () => {
+    setJoining(true);
+    setError(null);
+    const { data, error: e } = await supabase.rpc('join_circle', { invite_code: code });
+    setJoining(false);
+    if (e) {
+      setError(e.code === 'P0002' ? 'No circle found for that code. Check it and try again.' : e.message);
+      return;
+    }
+    router.push({ pathname: '/all-set', params: { circle: data } });
+  };
 
   const options: [IconName, string, string, () => void][] = [
     ['plus', 'Create a circle', 'For family, friends or your MSA', () => router.push('/create-circle')],
@@ -28,9 +44,17 @@ export default function FindCircleScreen() {
       bg="onboard"
       header={<OBTop step={5} skipTo="/all-set" />}
       footer={
-        <Btn kind={complete ? 'mint' : 'ghost'} disabled={!complete} style={{ opacity: complete ? 1 : 0.5 }} onPress={() => router.push('/all-set')}>
-          Join circle
-        </Btn>
+        <>
+          {error && <T style={{ color: SC.coral, fontSize: 14, textAlign: 'center' }}>{error}</T>}
+          <Btn
+            kind={complete ? 'mint' : 'ghost'}
+            disabled={!complete || joining}
+            style={{ opacity: complete ? 1 : 0.5 }}
+            icon={joining ? <ActivityIndicator color={SC.ink} /> : undefined}
+            onPress={join}>
+            Join circle
+          </Btn>
+        </>
       }>
       <OBHead k="STEP 5 OF 5" t="Find your circle" sub="Join friends with a code, or start one of your own." />
       <View style={{ marginTop: 28, paddingHorizontal: 16 }}>
@@ -60,7 +84,10 @@ export default function FindCircleScreen() {
         <TextInput
           ref={input}
           value={code}
-          onChangeText={(t) => setCode(t.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, LEN))}
+          onChangeText={(t) => {
+            setError(null);
+            setCode(t.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, LEN));
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           autoCapitalize="characters"

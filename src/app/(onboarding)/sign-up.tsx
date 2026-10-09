@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { OBHead } from '@/components/onboarding';
 import { Btn, Field, RoundBtn } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
+import { continueWithEmail, signInWithGoogle } from '@/lib/auth';
+import { SC } from '@/theme/colors';
 
 const AppleLogo = () => (
   <Svg width={18} height={20} viewBox="0 0 18 20">
@@ -17,9 +19,32 @@ const AppleLogo = () => (
   </Svg>
 );
 
+type Busy = null | 'google' | 'email';
+
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
-  const next = () => router.push('/setup-name');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState<Busy>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
+  const passwordOk = password.length >= 8;
+
+  // The tabs layout decides whether to continue setup or go to Today.
+  const done = () => router.replace('/');
+
+  const run = async (kind: Exclude<Busy, null>, fn: () => Promise<unknown>) => {
+    setBusy(kind);
+    setError(null);
+    try {
+      const result = await fn();
+      if (result !== false) done();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -32,10 +57,16 @@ export default function SignUpScreen() {
         }>
         <OBHead t="Create your account" sub="Your prayer log stays private. Your circle sees only what you share." />
         <View style={{ marginTop: 40, paddingHorizontal: 16, gap: 10 }}>
-          <Btn icon={<AppleLogo />} onPress={next}>
-            Continue with Apple
-          </Btn>
-          <Btn kind="ghost" icon={<T style={{ fontWeight: '800', fontSize: 18 }}>G</T>} onPress={next}>
+          {Platform.OS === 'ios' && (
+            <Btn icon={<AppleLogo />} onPress={() => Alert.alert('Coming soon', 'Sign in with Apple will be available in a later build.')}>
+              Continue with Apple
+            </Btn>
+          )}
+          <Btn
+            kind={Platform.OS === 'ios' ? 'ghost' : 'light'}
+            disabled={!!busy}
+            icon={busy === 'google' ? <ActivityIndicator color={Platform.OS === 'ios' ? '#fff' : SC.ink} /> : <T style={{ fontWeight: '800', fontSize: 18 }}>G</T>}
+            onPress={() => run('google', signInWithGoogle)}>
             Continue with Google
           </Btn>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 14, opacity: 0.45 }}>
@@ -51,14 +82,34 @@ export default function SignUpScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
-            returnKeyType="go"
-            onSubmitEditing={next}
+            textContentType="emailAddress"
           />
-          <Btn kind="mint" style={{ marginTop: 14 }} onPress={next}>
+          <View style={{ marginTop: 8 }}>
+            <Field
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="At least 8 characters"
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+              textContentType="password"
+              returnKeyType="go"
+              onSubmitEditing={() => emailOk && passwordOk && run('email', () => continueWithEmail(email.trim(), password))}
+            />
+          </View>
+          {error && <T style={{ color: SC.coral, fontSize: 14, marginTop: 4 }}>{error}</T>}
+          <Btn
+            kind="mint"
+            style={{ marginTop: 14, opacity: emailOk && passwordOk ? 1 : 0.5 }}
+            disabled={!emailOk || !passwordOk || !!busy}
+            icon={busy === 'email' ? <ActivityIndicator color={SC.ink} /> : undefined}
+            onPress={() => run('email', () => continueWithEmail(email.trim(), password))}>
             Continue with email
           </Btn>
+          <T style={{ fontSize: 12, opacity: 0.5, textAlign: 'center' }}>New here? We’ll create your account. Already joined? We’ll sign you in.</T>
         </View>
-        <T style={{ marginTop: 40, marginHorizontal: 32, textAlign: 'center', fontSize: 12, opacity: 0.5, lineHeight: 18 }}>
+        <T style={{ marginTop: 32, marginHorizontal: 32, textAlign: 'center', fontSize: 12, opacity: 0.5, lineHeight: 18 }}>
           By continuing you agree to the Terms and Privacy Policy.
         </T>
       </Screen>

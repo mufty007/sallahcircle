@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useRef, type ReactNode } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
@@ -10,12 +10,17 @@ import { Icon } from '@/components/ui/icon';
 import { Av, Btn, Dots, Stars } from '@/components/ui/primitives';
 import { T } from '@/components/ui/text';
 import { MEMBERS, PERIODS } from '@/data/mock';
+import { useSession } from '@/state/session';
 import { mintA, SC, type Period } from '@/theme/colors';
 
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   const ref = useRef<ScrollView>(null);
   const go = (i: number) => ref.current?.scrollTo({ x: i * width, animated: true });
+  const { loading, session } = useSession();
+
+  // Already signed in: the tabs layout routes to setup or Today.
+  if (!loading && session) return <Redirect href="/" />;
 
   return (
     <View style={{ flex: 1 }}>

@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 
 import { Btn, Chip, Field, glass, hairline, Label, RoundBtn, Segmented, Toggle } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
+import { supabase } from '@/lib/supabase';
 import { AVATAR_COLORS, SC } from '@/theme/colors';
 
 const COLORS = AVATAR_COLORS.slice(0, 5);
@@ -17,6 +18,24 @@ export default function CreateCircleScreen() {
   const [focus, setFocus] = useState(FOCUS[0]);
   const [board, setBoard] = useState(true);
   const [nudges, setNudges] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const create = async () => {
+    setSaving(true);
+    setError(null);
+    const { data, error: e } = await supabase
+      .from('circles')
+      .insert({ name: name.trim(), color, visibility: privacy === 'public' ? 'public' : 'private', focus, leaderboard_enabled: board, nudges_enabled: nudges })
+      .select('id')
+      .single();
+    setSaving(false);
+    if (e) {
+      setError(e.message);
+      return;
+    }
+    router.push({ pathname: '/invite', params: { circle: data.id } });
+  };
 
   const rows: [string, string, boolean, (v: boolean) => void][] = [
     ['Weekly leaderboard', 'Friendly ranking, resets each Sunday', board, setBoard],
@@ -35,9 +54,17 @@ export default function CreateCircleScreen() {
           </View>
         }
         footer={
-          <Btn kind="mint" disabled={!name.trim()} style={{ opacity: name.trim() ? 1 : 0.5 }} onPress={() => router.push({ pathname: '/invite', params: { name: name.trim() } })}>
-            Create circle
-          </Btn>
+          <>
+            {error && <T style={{ color: SC.coral, fontSize: 14, textAlign: 'center' }}>{error}</T>}
+            <Btn
+              kind="mint"
+              disabled={!name.trim() || saving}
+              style={{ opacity: name.trim() ? 1 : 0.5 }}
+              icon={saving ? <ActivityIndicator color={SC.ink} /> : undefined}
+              onPress={create}>
+              Create circle
+            </Btn>
+          </>
         }>
         <View style={{ marginTop: 24, paddingHorizontal: 16, gap: 22 }}>
           <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-end' }}>

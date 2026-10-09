@@ -8,6 +8,8 @@ import { Av, glass, hairline, RoundBtn, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { MEMBERS } from '@/data/mock';
+import { METHODS } from '@/lib/prayer-times';
+import { useSession } from '@/state/session';
 import { mintA, SC } from '@/theme/colors';
 
 const HEAT = Array.from({ length: 84 }, (_, i) => {
@@ -21,10 +23,13 @@ const BADGES: [string, string, boolean][] = [
   ['40', 'Fajr', false],
   ['1', 'Jamāʿah', true],
 ];
-const FRIEND_CODE = 'DCVPGB';
 
 export default function MeScreen() {
   const [copied, setCopied] = useState(false);
+  const { profile } = useSession();
+  const FRIEND_CODE = profile?.friend_code ?? '';
+  const me = { init: (profile?.display_name?.[0] ?? '?').toUpperCase(), color: profile?.avatar_color ?? MEMBERS[0].color };
+  const method = METHODS.find((m) => m.id === profile?.calc_method)?.name ?? 'ISNA';
   // 12 columns (weeks) × 7 rows (days), filled column-first like the design.
   const weeks = Array.from({ length: 12 }, (_, w) => HEAT.slice(w * 7, w * 7 + 7));
 
@@ -34,10 +39,10 @@ export default function MeScreen() {
         <RoundBtn n="gear" onPress={() => router.push('/settings')} />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, marginTop: -16 }}>
-        <Av m={MEMBERS[0]} s={64} />
+        <Av m={me} s={64} />
         <View>
-          <T style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.5 }}>mtomas</T>
-          <T style={{ fontSize: 14, opacity: 0.6 }}>@abdullahimuhammad269</T>
+          <T style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.5 }}>{profile?.display_name ?? 'You'}</T>
+          <T style={{ fontSize: 14, opacity: 0.6 }}>@{profile?.username}</T>
         </View>
       </View>
 
@@ -106,8 +111,8 @@ export default function MeScreen() {
           <Icon n={copied ? 'check' : 'copy'} s={16} c={SC.mint} style={{ marginLeft: 8 }} />
         </Tap>
         {[
-          ['Location', 'Chicago, IL'],
-          ['Calculation', 'ISNA · Ḥanafī Asr'],
+          ['Location', [profile?.city, profile?.region].filter(Boolean).join(', ') || 'Not set'],
+          ['Calculation', `${method} · ${profile?.asr_method === 'hanafi' ? 'Ḥanafī' : 'Standard'} Asr`],
         ].map(([a, b]) => (
           <Tap key={a} onPress={() => router.push('/settings')} style={{ flexDirection: 'row', alignItems: 'center', height: 44, borderTopWidth: 1, borderTopColor: hairline() }}>
             <T style={{ flex: 1, opacity: 0.65, fontSize: 14 }}>{a}</T>

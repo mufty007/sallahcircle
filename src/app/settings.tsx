@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/icon';
 import { glass, hairline, Kicker, LocalToggle, Tap } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { useAppState } from '@/state/app-state';
+import { useSession } from '@/state/session';
 
 type Row = { label: string; value?: string; toggle?: boolean; href?: Href };
 
@@ -39,7 +39,7 @@ const GROUPS: [string, Row[]][] = [
 ];
 
 export default function SettingsScreen() {
-  const { setOnboarded } = useAppState();
+  const { signOut } = useSession();
   return (
     <Screen bg="navy" header={<BackBar />}>
       <PageTitle t="Settings" style={{ marginTop: 16 }} />
@@ -70,8 +70,8 @@ export default function SettingsScreen() {
             </View>
           </View>
         ))}
-        <Tap onPress={() => {
-            setOnboarded(false);
+        <Tap onPress={async () => {
+            await signOut();
             router.dismissAll();
             router.replace('/welcome');
           }} style={[glass, { height: 50, alignItems: 'center', justifyContent: 'center' }]}>

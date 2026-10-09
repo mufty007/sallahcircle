@@ -2,13 +2,14 @@ import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 
 import { TabBar } from '@/components/tab-bar';
-import { useAppState } from '@/state/app-state';
+import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
 export default function TabsLayout() {
-  const { onboarded } = useAppState();
-  // Until auth is wired up, every fresh launch starts with onboarding.
-  if (!onboarded) return <Redirect href="/welcome" />;
+  const { loading, session, onboarded } = useSession();
+  if (loading) return null;
+  if (!session) return <Redirect href="/welcome" />;
+  if (!onboarded) return <Redirect href="/setup-name" />;
 
   return (
     <Tabs
