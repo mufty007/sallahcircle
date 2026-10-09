@@ -46,7 +46,9 @@ export function useQuery<T>(key: string | null, load: () => Promise<T>): QuerySt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, v]);
   const data = key ? ((cache.get(key) as T | undefined) ?? null) : null;
-  return { data, error: state.key === key ? state.error : null, loading: !!key && data === null && !state.error, refresh: invalidate };
+  // A query can legitimately resolve to null (e.g. "not logged yet"), so "loaded" means "has a cached result".
+  const error = state.key === key ? state.error : null;
+  return { data, error, loading: !!key && !cache.has(key) && !error, refresh: invalidate };
 }
 
 // ─── Helpers ────────────────────────────────────────────────────

@@ -28,7 +28,7 @@ function LogPrayerContent() {
   const date = params.date ?? isoDate(now, tz);
   const existing = useQuery(profile ? `mylog:${profile.id}:${prayer}:${date}` : null, () => loadMyLog(profile!.id, prayer, date));
 
-  if (!profile || (existing.loading && existing.data === null)) {
+  if (!profile || existing.loading) {
     return (
       <View style={{ height: 320, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={SC.ink} />

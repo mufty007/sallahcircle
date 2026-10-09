@@ -16,12 +16,12 @@ export async function sessionFromUrl(url: string) {
 
   const error = params.get('error_description') ?? params.get('error');
   if (error) {
-    const code = params.get('error_code') ?? '';
-    throw new Error(
-      code === 'unexpected_failure' || /exchange external code/i.test(error)
-        ? 'Google sign-in isn’t configured correctly on the server. Please try email for now.'
-        : error.replace(/\+/g, ' '),
-    );
+    const detail = error.replace(/\+/g, ' '); // URLSearchParams already decoded it
+    console.warn('OAuth error', params.get('error_code'), detail);
+    if (/access_denied/i.test(params.get('error') ?? '')) throw new Error('Sign-in was cancelled.');
+    // Supabase couldn't trade Google's code: almost always a Client ID / secret mismatch in Auth → Providers → Google.
+    if (/exchange external code/i.test(detail)) throw new Error(`Google sign-in failed on the server (${detail}). Check the Google Client ID and secret in Supabase.`);
+    throw new Error(detail);
   }
 
   const code = params.get('code');
