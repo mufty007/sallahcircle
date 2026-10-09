@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Platform, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Linking, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { Globe } from '@/components/globe';
 import { OBHead, OBTop, useSetupNext } from '@/components/onboarding';
@@ -122,7 +122,7 @@ export default function SetupLocationScreen() {
   const center: [number, number] = place ? [place.longitude, place.latitude] : [20, 25];
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <Screen
         bg="onboard"
         header={<OBTop step={2} />}
@@ -198,6 +198,6 @@ export default function SetupLocationScreen() {
           </View>
         )}
       </Screen>
-    </KeyboardAvoidingView>
+    </>
   );
 }

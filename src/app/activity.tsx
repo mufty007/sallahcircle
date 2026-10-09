@@ -1,47 +1,123 @@
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
+import { StoredVoice } from '@/components/voice';
 import { Av, Cell, Chip, glass, hairline, Kicker, RoundBtn } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { MEMBERS, type Member } from '@/data/mock';
+import type { PrayerStatus } from '@/data/mock';
+import { isoDate, loadLogs, respondToNudge, STATUS_CELL, useInbox, useMyCircles, useNow, useQuery, type InboxItem } from '@/lib/data';
+import { PRAYER_LABEL } from '@/lib/prayer-times';
+import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
-type Kind = 'reply' | 'voice' | 'jam' | 'done' | 'heart' | 'flame';
-type Item = { m: Member; text: ReactNode; time: string; kind: Kind; filter: Filter };
 type Filter = 'All' | 'Nudges' | 'Prayed' | 'Jamāʿah';
-
-const [, AB, ZA, YU, AY] = MEMBERS;
-const B = ({ children }: { children: ReactNode }) => <T style={{ fontWeight: '700' }}>{children}</T>;
-
-const GROUPS: [string, Item[]][] = [
-  [
-    'Now',
-    [
-      { m: AB, text: <><B>Abdullahi</B> nudged you: “Maghrib in 7m. Let’s go”</>, time: 'now', kind: 'reply', filter: 'Nudges' },
-      { m: ZA, text: <><B>Zainab</B> sent a voice note</>, time: '2m', kind: 'voice', filter: 'Nudges' },
-    ],
-  ],
-  [
-    'Earlier today',
-    [
-      { m: YU, text: <><B>Yusuf</B> invited you to pray Isha together · 10:30 PM</>, time: '12m', kind: 'jam', filter: 'Jamāʿah' },
-      { m: YU, text: <><B>Yusuf</B> prayed Maghrib on time</>, time: '34m', kind: 'done', filter: 'Prayed' },
-      { m: AY, text: <><B>Ayuba</B> sent you a duʿāʾ: <T style={{ fontFamily: 'serif' }}>بارك الله فيك</T></>, time: '2h', kind: 'heart', filter: 'Nudges' },
-      { m: ZA, text: <><B>Zainab</B> hit a 40-day Fajr streak</>, time: '6h', kind: 'flame', filter: 'Prayed' },
-    ],
-  ],
-];
-
 const FILTERS: Filter[] = ['All', 'Nudges', 'Prayed', 'Jamāʿah'];
 
-export default function ActivityScreen() {
-  const [filter, setFilter] = useState<Filter>('All');
-  const [answered, setAnswered] = useState<Record<string, string>>({});
+type Row = {
+  key: string;
+  at: Date;
+  who: { id: string; name: string; init: string; color: string };
+  filter: Exclude<Filter, 'All'>;
+  text: ReactNode;
+  nudge?: InboxItem;
+  cell?: PrayerStatus;
+  icon?: 'heart';
+};
 
-  const reply = (key: string, label: string) => setAnswered((a) => ({ ...a, [key]: label }));
+const B = ({ children }: { children: ReactNode }) => <T style={{ fontWeight: '700' }}>{children}</T>;
+
+function ago(ms: number) {
+  const m = Math.round(ms / 60_000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h}h` : `${Math.round(h / 24)}d`;
+}
+
+const REPLIES: Record<string, string[]> = {
+  nudge: ['On my way', 'JazākAllāh'],
+  together: ['Accept', 'Not this time'],
+  dua: ['Āmīn', 'JazākAllāhu khayran'],
+  voice: ['On my way', 'JazākAllāh'],
+};
+
+export default function ActivityScreen() {
+  const { session } = useSession();
+  const me = session?.user.id;
+  const now = useNow(60_000);
+  const [filter, setFilter] = useState<Filter>('All');
+  const [sending, setSending] = useState<string | null>(null);
+
+  const inbox = useInbox(me);
+  const circles = useMyCircles(me);
+  const mates = new Map((circles.data ?? []).flatMap((c) => c.members.filter((m) => !m.you)).map((m) => [m.id, m]));
+  const since = isoDate(new Date(now.getTime() - 86_400_000));
+  const logs = useQuery(mates.size ? `activity-logs:${[...mates.keys()].join(',')}:${since}` : null, () => loadLogs([...mates.keys()], since));
+
+  const rows: Row[] = [
+    ...(inbox.data ?? []).map((n): Row => {
+      const p = PRAYER_LABEL[n.prayer];
+      const text =
+        n.kind === 'together' ? (
+          <>
+            <B>{n.sender.name}</B> invited you to pray {p} together
+          </>
+        ) : n.kind === 'voice' ? (
+          <>
+            <B>{n.sender.name}</B> sent you a voice note for {p}
+          </>
+        ) : n.kind === 'dua' ? (
+          <>
+            <B>{n.sender.name}</B> sent you a duʿāʾ{n.message ? `: ${n.message}` : ''}
+          </>
+        ) : (
+          <>
+            <B>{n.sender.name}</B> nudged you{n.message ? `: “${n.message}”` : ` for ${p}`}
+          </>
+        );
+      return { key: `n-${n.id}`, at: n.createdAt, who: n.sender, filter: n.kind === 'together' ? 'Jamāʿah' : 'Nudges', text, nudge: n, icon: n.kind === 'dua' ? 'heart' : undefined };
+    }),
+    ...(logs.data ?? [])
+      .filter((l) => mates.has(l.user_id))
+      .map((l): Row => {
+        const m = mates.get(l.user_id)!;
+        return {
+          key: `l-${l.user_id}-${l.prayed_on}-${l.prayer}`,
+          at: new Date(l.logged_at),
+          who: m,
+          filter: 'Prayed',
+          cell: STATUS_CELL[l.status],
+          text: (
+            <>
+              <B>{m.name}</B> prayed {PRAYER_LABEL[l.prayer]}
+              {l.status === 'on_time' ? ' on time' : l.status === 'late' ? ' (late)' : ''}
+            </>
+          ),
+        };
+      }),
+  ]
+    .filter((r) => filter === 'All' || r.filter === filter)
+    .sort((a, b) => b.at.getTime() - a.at.getTime());
+
+  const groups: [string, Row[]][] = [
+    ['Last hour', rows.filter((r) => now.getTime() - r.at.getTime() < 3_600_000)],
+    ['Today', rows.filter((r) => now.getTime() - r.at.getTime() >= 3_600_000 && isoDate(r.at) === isoDate(now))],
+    ['Earlier', rows.filter((r) => isoDate(r.at) !== isoDate(now))],
+  ];
+
+  const reply = async (n: InboxItem, label: string) => {
+    setSending(n.id);
+    try {
+      await respondToNudge(n.id, label);
+    } finally {
+      setSending(null);
+    }
+  };
+
+  const loading = inbox.loading || circles.loading;
 
   return (
     <Screen bg="navy" header={<BackBar right={<RoundBtn n="gear" onPress={() => router.push('/settings')} />} />}>
@@ -54,67 +130,67 @@ export default function ActivityScreen() {
         ))}
       </ScrollView>
 
+      {loading && <ActivityIndicator style={{ marginTop: 40 }} color="#fff" />}
+      {!loading && rows.length === 0 && (
+        <View style={[glass, { marginHorizontal: 16, marginTop: 24, padding: 20, alignItems: 'center' }]}>
+          <Icon n="bell" s={28} c="rgba(255,255,255,0.5)" />
+          <T style={{ fontSize: 16, fontWeight: '600', marginTop: 10 }}>Nothing here yet</T>
+          <T style={{ fontSize: 13, opacity: 0.6, marginTop: 4, textAlign: 'center' }}>Nudges, duʿāʾs and your circle’s prayers will show up here.</T>
+        </View>
+      )}
+
       <View style={{ marginHorizontal: 16, marginTop: 18, gap: 16 }}>
-        {GROUPS.map(([g, rows]) => {
-          const visible = rows.filter((r) => filter === 'All' || r.filter === filter);
-          if (!visible.length) return null;
-          return (
+        {groups.map(([g, list]) =>
+          list.length ? (
             <View key={g}>
               <Kicker style={{ opacity: 0.5, marginHorizontal: 8, marginBottom: 8 }}>{g.toUpperCase()}</Kicker>
               <View style={[glass, { paddingVertical: 2, paddingHorizontal: 14 }]}>
-                {visible.map((r, i) => {
-                  const key = `${g}-${i}`;
+                {list.map((r, i) => {
+                  const n = r.nudge;
+                  const options = n ? REPLIES[n.kind] : undefined;
                   return (
-                    <View key={key} style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: hairline(), alignItems: 'flex-start' }}>
-                      <Av m={r.m} s={36} />
+                    <View key={r.key} style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: hairline(), alignItems: 'flex-start' }}>
+                      <Av m={r.who} s={36} />
                       <View style={{ flex: 1 }}>
                         <T style={{ fontSize: 14, lineHeight: 19 }}>{r.text}</T>
-                        <T style={{ fontSize: 12, opacity: 0.45, marginTop: 2 }}>{r.time}</T>
-                        {(r.kind === 'reply' || r.kind === 'jam') &&
-                          (answered[key] ? (
-                            <T style={{ fontSize: 13, color: SC.mint, marginTop: 8, fontWeight: '600' }}>✓ {answered[key]}</T>
+                        <T style={{ fontSize: 12, opacity: 0.45, marginTop: 2 }}>{ago(now.getTime() - r.at.getTime())}</T>
+                        {n?.voicePath && (
+                          <View style={{ marginTop: 8 }}>
+                            <StoredVoice path={n.voicePath} />
+                          </View>
+                        )}
+                        {n &&
+                          options &&
+                          (n.response ? (
+                            <T style={{ fontSize: 13, color: SC.mint, marginTop: 8, fontWeight: '600' }}>✓ {n.response}</T>
+                          ) : sending === n.id ? (
+                            <ActivityIndicator style={{ alignSelf: 'flex-start', marginTop: 8 }} color={SC.mint} />
                           ) : (
-                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                              {(r.kind === 'reply' ? ['On my way', 'JazākAllāh'] : ['Accept', 'Not this time']).map((label, j) => (
+                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                              {options.map((label, j) => (
                                 <Chip
                                   key={label}
                                   bg={j === 0 ? SC.mint : undefined}
                                   c={j === 0 ? SC.ink : undefined}
                                   style={{ height: 30 }}
                                   textStyle={j === 0 ? { fontWeight: '600' } : undefined}
-                                  onPress={() => reply(key, label)}>
+                                  onPress={() => reply(n, label)}>
                                   {label}
                                 </Chip>
                               ))}
                             </View>
                           ))}
-                        {r.kind === 'voice' && <VoiceNote />}
                       </View>
-                      {r.kind === 'done' && <Cell k="d" s={22} />}
-                      {r.kind === 'heart' && <Icon n="heart" s={20} c={SC.coral} />}
-                      {r.kind === 'flame' && <Icon n="flame" s={20} c={SC.amber} />}
+                      {r.cell && <Cell k={r.cell} s={22} />}
+                      {r.icon === 'heart' && <Icon n="heart" s={20} c={SC.coral} />}
                     </View>
                   );
                 })}
               </View>
             </View>
-          );
-        })}
+          ) : null,
+        )}
       </View>
     </Screen>
-  );
-}
-
-function VoiceNote() {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, height: 36, paddingHorizontal: 12, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignSelf: 'flex-start' }}>
-      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: SC.coral, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ width: 0, height: 0, marginLeft: 2, borderLeftWidth: 7, borderLeftColor: '#fff', borderTopWidth: 5, borderTopColor: 'transparent', borderBottomWidth: 5, borderBottomColor: 'transparent' }} />
-      </View>
-      {[6, 10, 14, 9, 12, 16, 8, 5, 11, 13].map((h, j) => (
-        <View key={j} style={{ width: 3, height: h, borderRadius: 2, backgroundColor: '#fff', opacity: 0.6 }} />
-      ))}
-      <T style={{ fontSize: 12, opacity: 0.6 }}>0:08</T>
-    </View>
   );
 }

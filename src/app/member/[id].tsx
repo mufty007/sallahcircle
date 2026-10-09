@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
 import { Av, Cell, Chip, glass, Tap } from '@/components/ui/primitives';
 import { BackBar, Screen } from '@/components/ui/screen';
 import { InkContext, T } from '@/components/ui/text';
-import { isoDate, loadLogs, loadMemberSchedules, shortIn, statusRow, streakFrom, useMyCircles, useNow, useQuery } from '@/lib/data';
+import { isoDate, loadLogs, loadMemberSchedules, loadStreaks, removeMember, shortIn, statusRow, useMyCircles, useNow, useQuery } from '@/lib/data';
 import { formatTime, PRAYER_LABEL } from '@/lib/prayer-times';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
@@ -16,6 +17,7 @@ export default function MemberScreen() {
   const { id, circle: circleId } = useLocalSearchParams<{ id: string; circle?: string }>();
   const { session, profile } = useSession();
   const now = useNow(30_000);
+  const [removing, setRemoving] = useState(false);
   const circles = useMyCircles(session?.user.id);
   const shared = (circles.data ?? []).filter((c) => c.members.some((m) => m.id === id));
   const m = shared.flatMap((c) => c.members).find((x) => x.id === id);
@@ -25,6 +27,7 @@ export default function MemberScreen() {
   const s = sched.data?.[0];
   const since = isoDate(new Date(now.getTime() - 60 * DAY), m?.timezone);
   const logs = useQuery(m ? `member-logs:${m.id}:${since}` : null, () => loadLogs([m!.id], since));
+  const streaks = useQuery(m ? `streaks:${m.id}:${since}` : null, () => loadStreaks([m!.id]));
 
   if (!m) {
     return (
@@ -38,7 +41,7 @@ export default function MemberScreen() {
 
   const today = isoDate(now, m.timezone);
   const all = logs.data ?? [];
-  const streak = streakFrom(all, m.id, today);
+  const streak = streaks.data?.get(m.id) ?? 0;
   const onTime = all.length ? Math.round((all.filter((l) => l.status === 'on_time').length / all.length) * 100) : null;
 
   // Last 7 days (oldest → today) in the member's own calendar.
@@ -68,7 +71,16 @@ export default function MemberScreen() {
         </View>
       </View>
 
-      {!m.you && (
+      {!m.you && m.paused && (
+        <View style={[glass, { marginHorizontal: 16, marginTop: 24, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
+          <Icon n="moon" s={26} c="rgba(255,255,255,0.7)" />
+          <View style={{ flex: 1 }}>
+            <T style={{ fontSize: 17, fontWeight: '600' }}>Paused for now</T>
+            <T style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>{m.name} is taking a break. Nudges are off until they’re back.</T>
+          </View>
+        </View>
+      )}
+      {!m.you && !m.paused && (
         <View style={{ marginHorizontal: 16, marginTop: 24, borderRadius: 28, backgroundColor: SC.mint, padding: 18 }}>
           <InkContext value={SC.ink}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -130,6 +142,33 @@ export default function MemberScreen() {
           </View>
         ))}
       </View>
+
+      {circle && !m.you && circle.createdBy === session?.user.id && (
+        <Tap
+          disabled={removing}
+          onPress={() =>
+            Alert.alert(`Remove ${m.name}?`, `They’ll lose access to ${circle.name}. Reset the invite code if you don’t want them rejoining.`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                  setRemoving(true);
+                  try {
+                    await removeMember(circle.id, m.id);
+                    router.back();
+                  } catch (e) {
+                    Alert.alert('Couldn’t remove', e instanceof Error ? e.message : '');
+                    setRemoving(false);
+                  }
+                },
+              },
+            ])
+          }
+          style={[glass, { marginHorizontal: 16, marginTop: 16, height: 50, alignItems: 'center', justifyContent: 'center' }]}>
+          {removing ? <ActivityIndicator color={SC.coral} /> : <T style={{ fontSize: 15, fontWeight: '600', color: SC.coral }}>{`Remove from ${circle.name}`}</T>}
+        </Tap>
+      )}
     </Screen>
   );
 }

@@ -1,6 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { unregisterDevice } from '@/lib/notifications';
+import { clearReminders } from '@/lib/reminders';
 import { supabase, type Profile } from '@/lib/supabase';
 
 type ProfilePatch = Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at' | 'friend_code'>>;
@@ -64,6 +66,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    await Promise.all([clearReminders().catch(() => {}), unregisterDevice().catch(() => {})]);
     await supabase.auth.signOut();
   }, []);
 

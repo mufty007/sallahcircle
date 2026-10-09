@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Btn, Chip, Field, glass, hairline, Label, RoundBtn, Segmented, Toggle } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
@@ -13,7 +13,8 @@ const COLORS = AVATAR_COLORS.slice(0, 5);
 const FOCUS = ['All five prayers', 'Fajr', 'Jumuʿah', 'Qurʾān daily'];
 
 export default function CreateCircleScreen() {
-  const [name, setName] = useState('Fam');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [color, setColor] = useState<string>(COLORS[0]);
   const [privacy, setPrivacy] = useState<'invite' | 'public'>('invite');
   const [focus, setFocus] = useState(FOCUS[0]);
@@ -27,7 +28,7 @@ export default function CreateCircleScreen() {
     setError(null);
     const { data, error: e } = await supabase
       .from('circles')
-      .insert({ name: name.trim(), color, visibility: privacy === 'public' ? 'public' : 'private', focus, leaderboard_enabled: board, nudges_enabled: nudges })
+      .insert({ name: name.trim(), color, visibility: privacy === 'public' ? 'public' : 'private', focus, leaderboard_enabled: board, nudges_enabled: nudges, description: description.trim() || null })
       .select('id')
       .single();
     setSaving(false);
@@ -45,7 +46,7 @@ export default function CreateCircleScreen() {
   ];
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <Screen
         bg="onboard"
         header={
@@ -74,7 +75,7 @@ export default function CreateCircleScreen() {
               <T style={{ color: SC.ink, fontSize: 32, fontWeight: '700' }}>{(name.trim()[0] ?? '?').toUpperCase()}</T>
             </View>
             <View style={{ flex: 1 }}>
-              <Field label="Circle name" value={name} onChangeText={setName} maxLength={32} />
+              <Field label="Circle name" value={name} onChangeText={setName} placeholder="e.g. Family, MSA, Fajr crew" maxLength={32} />
             </View>
           </View>
 
@@ -102,6 +103,16 @@ export default function CreateCircleScreen() {
               ]}
             />
           </View>
+
+          {privacy === 'public' && (
+            <Field
+              label="Description (shown on Discover)"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="What is this circle about?"
+              maxLength={200}
+            />
+          )}
 
           <View>
             <Label>Focus</Label>
@@ -133,6 +144,6 @@ export default function CreateCircleScreen() {
           </View>
         </View>
       </Screen>
-    </KeyboardAvoidingView>
+    </>
   );
 }

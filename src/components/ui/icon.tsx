@@ -89,6 +89,28 @@ const IC = {
   wave: (
     <Path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V11M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.8-2.4L4 15a1.5 1.5 0 0 1 2.3-2L7 14" />
   ),
+  play: <Path d="M8 5.5v13l10.5-6.5z" />,
+  pause: <Path d="M8 5v14M16 5v14" />,
+  stop: <Rect x="6.5" y="6.5" width="11" height="11" rx="2" />,
+  redo: <Path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5" />,
+  minus: <Path d="M5 12h14" />,
+  beads: (
+    <>
+      <Circle cx="12" cy="4.5" r="2" />
+      <Circle cx="18" cy="9" r="2" />
+      <Circle cx="16" cy="16" r="2" />
+      <Circle cx="8" cy="16" r="2" />
+      <Circle cx="6" cy="9" r="2" />
+      <Path d="M12 18v3" />
+    </>
+  ),
+  plate: (
+    <>
+      <Circle cx="12" cy="12" r="8.5" />
+      <Circle cx="12" cy="12" r="4.5" />
+    </>
+  ),
+  list: <Path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof IC;

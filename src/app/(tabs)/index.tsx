@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/icon';
 import { Av, Btn, Chip, RoundBtn, Stars, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { countdown, isoDate, loadLogs, loadMemberSchedules, shortIn, statusRow, streakFrom, useMyCircles, useQuery } from '@/lib/data';
+import { countdown, excusedDates, isoDate, loadLogs, loadMemberSchedules, shortIn, statusRow, streakFrom, useExcused, useInbox, useMyCircles, useQuery } from '@/lib/data';
 import { formatTime, PRAYER_KEYS, PRAYER_LABEL } from '@/lib/prayer-times';
 import { useMyDay } from '@/lib/today';
 import { useAppState } from '@/state/app-state';
@@ -25,32 +25,34 @@ export default function TodayScreen() {
   const tz = profile?.timezone;
 
   const circles = useMyCircles(me);
+  const inbox = useInbox(me);
+  const unread = (inbox.data ?? []).some((n) => !n.response && now.getTime() - n.createdAt.getTime() < 12 * 3_600_000);
   const circle = circles.data?.[0] ?? null;
   const others = circle?.members.filter((m) => !m.you) ?? [];
 
   // Members' next prayers (refreshed each minute) and the last 60 days of logs.
   const minuteKey = Math.floor(now.getTime() / 60_000);
-  const schedules = useQuery(circle ? `schedules:${circle.id}:${others.map((m) => m.id).join(',')}:${minuteKey}` : null, () =>
-    loadMemberSchedules(others),
-  );
+  const schedules = useQuery(circle ? `schedules:${circle.id}:${others.map((m) => m.id).join(',')}:${minuteKey}` : null, () => loadMemberSchedules(others));
   const since = isoDate(new Date(now.getTime() - 60 * 86_400_000), tz);
   const memberIds = [me, ...others.map((m) => m.id)].filter(Boolean) as string[];
   const logs = useQuery(me ? `logs:${memberIds.join(',')}:${since}` : null, () => loadLogs(memberIds, since));
 
   const size = Math.min(360, width - 30);
   const btn = dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.7)';
-  const card = dark
-    ? { backgroundColor: 'rgba(8,12,30,0.5)', borderColor: 'rgba(255,255,255,0.1)' }
-    : { backgroundColor: 'rgba(255,255,255,0.82)', borderColor: 'rgba(255,255,255,0.9)' };
+  const card = dark ? { backgroundColor: 'rgba(8,12,30,0.5)', borderColor: 'rgba(255,255,255,0.1)' } : { backgroundColor: 'rgba(255,255,255,0.82)', borderColor: 'rgba(255,255,255,0.9)' };
 
   const myRow = me ? statusRow(logs.data ?? [], me, todayIso, next?.date === todayIso ? next.key : undefined) : [];
-  const streak = me ? streakFrom(logs.data ?? [], me, todayIso) : 0;
+  const excused = useExcused(me, !!profile?.track_excused);
+  const paused = !!profile?.paused_since;
+  const pausedDay = profile?.paused_since ? Math.round((Date.parse(todayIso) - Date.parse(profile.paused_since)) / 86_400_000) + 1 : 0;
+  const streak = me ? streakFrom(logs.data ?? [], me, todayIso, excusedDates(excused.data, todayIso)) : 0;
 
   // The prayer whose time has most recently started is the one to log from the dial.
   const current = day ? [...PRAYER_KEYS].reverse().find((p) => day.times[p] <= now) : undefined;
 
-  const queue = (schedules.data ?? []).map((s) => [s.member, `${PRAYER_LABEL[s.next]} · ${shortIn(s.at.getTime() - now.getTime())}`] as const);
-  const dueSoon = (schedules.data ?? []).filter((s) => s.at.getTime() - now.getTime() < NUDGE_WINDOW_MS).length;
+  const active = (schedules.data ?? []).filter((s) => !s.member.paused);
+  const queue = active.map((s) => [s.member, `${PRAYER_LABEL[s.next]} · ${shortIn(s.at.getTime() - now.getTime())}`] as const);
+  const dueSoon = active.filter((s) => s.at.getTime() - now.getTime() < NUDGE_WINDOW_MS).length;
   const cardSub = dueSoon ? `${dueSoon} could use a nudge` : schedules.data?.length ? 'All quiet for now' : '';
 
   const openLog = (prayer: (typeof PRAYER_KEYS)[number]) => router.push({ pathname: '/log-prayer', params: { prayer, date: todayIso } });
@@ -75,10 +77,7 @@ export default function TodayScreen() {
           {circle && others.length > 0 && (
             <View style={{ flexDirection: 'row' }}>
               {others.slice(0, 3).map((m, i) => (
-                <View
-                  key={m.id}
-                  style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: m.color, marginLeft: i ? -6 : 0, borderWidth: 2, borderColor: dark ? '#262c61' : '#9cc8ee' }}
-                />
+                <View key={m.id} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: m.color, marginLeft: i ? -6 : 0, borderWidth: 2, borderColor: dark ? '#262c61' : '#9cc8ee' }} />
               ))}
             </View>
           )}
@@ -90,13 +89,13 @@ export default function TodayScreen() {
             <Icon n="flame" s={17} />
             {String(streak)}
           </Chip>
-          <RoundBtn n="bell" bg={btn} onPress={() => router.push('/activity')} />
+          <RoundBtn n="bell" bg={btn} dot={unread} onPress={() => router.push('/activity')} />
         </View>
       </View>
 
       {/* Tap the dial to log the current prayer; long-press to preview other skies. */}
       <Tap
-        onPress={() => current && openLog(current)}
+        onPress={() => current && !paused && openLog(current)}
         onLongPress={cycleSky}
         accessibilityLabel={next ? `${PRAYER_LABEL[next.key]} in ${countdown(next.at.getTime() - now.getTime())}. Tap to log a prayer.` : 'Prayer times'}
         style={{ alignSelf: 'center', marginTop: 8 }}>
@@ -109,9 +108,7 @@ export default function TodayScreen() {
           {next ? (
             <>
               <T style={{ fontSize: 15, fontWeight: '600', opacity: 0.75 }}>{PRAYER_LABEL[next.key]} in</T>
-              <T style={{ fontSize: 54, fontWeight: '600', letterSpacing: -2.5, lineHeight: 58, fontVariant: ['tabular-nums'] }}>
-                {countdown(next.at.getTime() - now.getTime())}
-              </T>
+              <T style={{ fontSize: 54, fontWeight: '600', letterSpacing: -2.5, lineHeight: 58, fontVariant: ['tabular-nums'] }}>{countdown(next.at.getTime() - now.getTime())}</T>
               <T style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>Adhān {formatTime(next.at, tz, true)}</T>
             </>
           ) : !place ? (
@@ -124,14 +121,27 @@ export default function TodayScreen() {
         </View>
       </Tap>
 
-      <View style={{ marginTop: 10 }}>
-        <PrayerRow
-          st={myRow.length ? myRow : ['u', 'u', 'u', 'u', 'u']}
-          dark={dark}
-          times={day ? PRAYER_KEYS.map((p) => formatTime(day.times[p], tz)) : undefined}
-          onPress={(i) => day && day.times[PRAYER_KEYS[i]] <= now && openLog(PRAYER_KEYS[i])}
-        />
-      </View>
+      {paused ? (
+        <Tap
+          onPress={() => router.push('/excused')}
+          style={{ marginHorizontal: 16, marginTop: 10, borderRadius: 28, padding: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12, ...card }}>
+          <Icon n="moon" s={24} />
+          <View style={{ flex: 1 }}>
+            <T style={{ fontSize: 16, fontWeight: '600' }}>Excused · day {pausedDay}</T>
+            <T style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>Your streak is safe and reminders are paused. Tap when you’re ready to end it.</T>
+          </View>
+          <Icon n="chev" s={18} />
+        </Tap>
+      ) : (
+        <View style={{ marginTop: 10 }}>
+          <PrayerRow
+            st={myRow.length ? myRow : ['u', 'u', 'u', 'u', 'u']}
+            dark={dark}
+            times={day ? PRAYER_KEYS.map((p) => formatTime(day.times[p], tz)) : undefined}
+            onPress={(i) => day && day.times[PRAYER_KEYS[i]] <= now && openLog(PRAYER_KEYS[i])}
+          />
+        </View>
+      )}
 
       <View style={{ marginHorizontal: 16, marginTop: 16, borderRadius: 28, paddingTop: 14, paddingHorizontal: 16, paddingBottom: circle && queue.length ? 2 : 16, borderWidth: 1, ...card }}>
         {!circle ? (

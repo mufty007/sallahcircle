@@ -49,7 +49,7 @@ export default function AllSetScreen() {
     }
   };
 
-  const me = { init: (profile?.display_name?.[0] ?? '?').toUpperCase(), color: profile?.avatar_color ?? SC.mint };
+  const me = { init: (profile?.display_name?.[0] ?? '?').toUpperCase(), color: profile?.avatar_color ?? SC.mint, seed: profile?.avatar_seed ?? profile?.id };
   const p = PERIODS.maghrib;
 
   return (

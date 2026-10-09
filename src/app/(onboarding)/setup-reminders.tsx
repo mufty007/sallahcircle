@@ -7,7 +7,9 @@ import { Btn, Chip, glass, hairline, Label, Toggle } from '@/components/ui/primi
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { formatTime, PRAYER_KEYS, PRAYER_LABEL, useDayTimes, type PrayerKey } from '@/lib/prayer-times';
+import { invalidate } from '@/lib/data';
 import { registerForNotifications } from '@/lib/notifications';
+import { syncReminders } from '@/lib/reminders';
 import { supabase, type Enums } from '@/lib/supabase';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
@@ -77,7 +79,9 @@ export default function SetupRemindersScreen() {
         supabase.from('reminder_settings').upsert({ user_id: userId, heads_up_minutes: headsUp, allow_nudges: allowNudges }),
       ]);
       if (r.error || s.error) throw r.error ?? s.error;
+      invalidate();
       if (askPermission) await registerForNotifications(userId);
+      if (profile) syncReminders(userId, profile, true).catch((e) => console.warn('Reminder sync failed', e));
       next('/find-circle');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save reminders.');

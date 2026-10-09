@@ -61,6 +61,8 @@ export type Hijri = {
 
 export type DayTimes = {
   times: Record<PrayerKey, Date>;
+  /** Start of the fast (a few minutes before Fajr). */
+  imsak: Date;
   sunrise: Date;
   sunset: Date;
   hijri: Hijri;
@@ -95,6 +97,7 @@ const toDay = (d: ApiDay): DayTimes => ({
     maghrib: new Date(d.timings.Maghrib),
     isha: new Date(d.timings.Isha),
   },
+  imsak: new Date(d.timings.Imsak ?? d.timings.Fajr),
   sunrise: new Date(d.timings.Sunrise),
   sunset: new Date(d.timings.Sunset),
   hijri: d.date.hijri,

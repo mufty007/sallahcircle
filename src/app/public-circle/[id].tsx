@@ -1,20 +1,42 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { Sky } from '@/components/ui/background';
-import { Av, Btn, Chip, glass, RoundBtn, Stars } from '@/components/ui/primitives';
+import { Btn, Chip, glass, RoundBtn, Stars } from '@/components/ui/primitives';
 import { BackBar, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { FEATURED_CIRCLE, MEMBERS, PUBLIC_CIRCLES } from '@/data/mock';
-import { SKY } from '@/theme/colors';
+import { joinCircle, usePublicCircles } from '@/lib/data';
+import { useSession } from '@/state/session';
+import { SC, SKY } from '@/theme/colors';
+
+const ABOUT: Record<string, string> = {
+  Fajr: 'A circle for waking up for Fajr together. Members nudge each other before dawn and keep each other’s streaks going.',
+  'All five prayers': 'Keep all five prayers on time with people who’ll check in on you, wherever they are in the world.',
+  'Jumuʿah': 'Never miss Jumuʿah. Friendly reminders before the khuṭbah every Friday.',
+  'Qurʾān daily': 'Pray on time and keep a daily connection with the Qurʾān, together.',
+};
 
 export default function PublicCircleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [joined, setJoined] = useState(false);
-  const other = PUBLIC_CIRCLES.find((c) => c.id === id);
-  // Only Fajr Club has full details in the mock; other circles reuse its layout.
-  const c = { ...FEATURED_CIRCLE, ...(other && { name: other.name, tagline: other.sub, onTime: `${other.pct}%` }) };
+  const { session } = useSession();
+  const pub = usePublicCircles(!!session);
+  const c = pub.data?.find((x) => x.id === id);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const join = async () => {
+    if (!c) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await joinCircle(c.code);
+      router.replace({ pathname: '/circle/[id]', params: { id: c.id } });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not join.');
+      setBusy(false);
+    }
+  };
 
   return (
     <Screen
@@ -23,58 +45,65 @@ export default function PublicCircleScreen() {
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 330, overflow: 'hidden' }}>
           <Sky g={SKY.fajr} />
           <Stars n={30} h={200} />
-          <View style={{ position: 'absolute', left: -20, right: -20, bottom: -150, height: 300, borderRadius: 999, backgroundColor: '#FFD2A6', opacity: 0.25, filter: 'blur(40px)' }} />
         </View>
       }
       header={<BackBar right={<RoundBtn n="share" />} />}
       footer={
-        <Btn kind={joined ? 'ghost' : 'mint'} onPress={() => (joined ? router.push('/circles') : setJoined(true))}>
-          {joined ? `You’re in ${c.name} ✓` : `Join ${c.name}`}
-        </Btn>
+        c && (
+          <>
+            {error && <T style={{ color: SC.coral, fontSize: 14, textAlign: 'center' }}>{error}</T>}
+            <Btn
+              kind={c.joined ? 'ghost' : 'mint'}
+              disabled={busy}
+              icon={busy ? <ActivityIndicator color={SC.ink} /> : undefined}
+              onPress={() => (c.joined ? router.replace({ pathname: '/circle/[id]', params: { id: c.id } }) : join())}>
+              {c.joined ? `Open ${c.name}` : `Join ${c.name}`}
+            </Btn>
+          </>
+        )
       }>
-      <View style={{ marginTop: 110, paddingHorizontal: 24 }}>
-        <Chip bg="rgba(255,255,255,0.18)" style={{ height: 26 }} textStyle={{ fontSize: 12 }}>
-          {`Public · ${c.focus}`}
-        </Chip>
-        <T style={{ fontSize: 48, fontWeight: '700', letterSpacing: -1.8, marginTop: 10, lineHeight: 50 }}>{c.name}</T>
-        <T style={{ fontSize: 15, opacity: 0.85, marginTop: 6 }}>{c.tagline}</T>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 34 }}>
-        {[
-          [c.members, 'members'],
-          [c.onTime, 'Fajr on time'],
-          [c.avgStreak, 'avg. streak'],
-        ].map(([a, b]) => (
-          <View key={b} style={[glass, { flex: 1, borderRadius: 22, padding: 14 }]}>
-            <T style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.6 }}>{a}</T>
-            <T style={{ fontSize: 12, opacity: 0.6 }}>{b}</T>
-          </View>
-        ))}
-      </View>
-
-      <View style={[glass, { marginHorizontal: 16, marginTop: 12, padding: 16 }]}>
-        <T style={{ fontSize: 16, fontWeight: '600', marginBottom: 6 }}>How it works</T>
-        <T style={{ fontSize: 14, opacity: 0.7, lineHeight: 20 }}>{c.about}</T>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-          {c.tags.map((t) => (
-            <Chip key={t} style={{ height: 28 }} textStyle={{ fontSize: 12 }}>
-              {t}
+      {!c ? (
+        <View style={{ marginTop: 140, alignItems: 'center' }}>
+          {pub.loading ? <ActivityIndicator color="#fff" /> : <T style={{ opacity: 0.7 }}>This circle isn’t public any more.</T>}
+        </View>
+      ) : (
+        <>
+          <View style={{ marginTop: 110, paddingHorizontal: 24 }}>
+            <Chip bg="rgba(255,255,255,0.18)" style={{ height: 26 }} textStyle={{ fontSize: 12 }}>
+              {`Public · ${c.focus}`}
             </Chip>
-          ))}
-        </View>
-      </View>
+            <T style={{ fontSize: 48, fontWeight: '700', letterSpacing: -1.8, marginTop: 10, lineHeight: 50 }}>{c.name}</T>
+          </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 24, marginTop: 20 }}>
-        <View style={{ flexDirection: 'row' }}>
-          {[MEMBERS[2], MEMBERS[3], MEMBERS[4], MEMBERS[1]].map((m, i) => (
-            <Av key={m.id} m={m} s={30} style={{ marginLeft: i ? -8 : 0, borderWidth: 2, borderColor: '#0A1226' }} />
-          ))}
-        </View>
-        <T style={{ fontSize: 13, opacity: 0.7 }}>
-          <T style={{ fontWeight: '700' }}>Zainab</T> and 3 friends are members
-        </T>
-      </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 34 }}>
+            {[
+              [String(c.memberCount), `member${c.memberCount === 1 ? '' : 's'}`],
+              [c.focus === 'All five prayers' ? '5' : '1', 'daily focus'],
+              ['2', 'nudges / prayer'],
+            ].map(([a, b]) => (
+              <View key={b} style={[glass, { flex: 1, borderRadius: 22, padding: 14 }]}>
+                <T style={{ fontSize: 24, fontWeight: '700', letterSpacing: -0.6 }}>{a}</T>
+                <T style={{ fontSize: 12, opacity: 0.6 }}>{b}</T>
+              </View>
+            ))}
+          </View>
+
+          <View style={[glass, { marginHorizontal: 16, marginTop: 12, padding: 16 }]}>
+            <T style={{ fontSize: 16, fontWeight: '600', marginBottom: 6 }}>About</T>
+            <T style={{ fontSize: 14, opacity: 0.7, lineHeight: 20 }}>{c.description || ABOUT[c.focus] || ABOUT['All five prayers']}</T>
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+              {['Open to everyone', 'Up to 2 nudges / prayer', 'Weekly leaderboard'].map((t) => (
+                <Chip key={t} style={{ height: 28 }} textStyle={{ fontSize: 12 }}>
+                  {t}
+                </Chip>
+              ))}
+            </View>
+          </View>
+          <T style={{ marginTop: 16, marginHorizontal: 32, textAlign: 'center', fontSize: 12, opacity: 0.5, lineHeight: 18 }}>
+            Members see your name, city and whether you prayed — never the details.
+          </T>
+        </>
+      )}
     </Screen>
   );
 }

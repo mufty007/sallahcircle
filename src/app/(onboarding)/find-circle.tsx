@@ -7,7 +7,6 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Btn, Label, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { FEATURED_CIRCLE } from '@/data/mock';
 import { invalidate } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/state/session';
@@ -41,7 +40,8 @@ export default function FindCircleScreen() {
 
   const options: [IconName, string, string, () => void][] = [
     ['plus', 'Create a circle', 'For family, friends or your MSA', () => router.push('/create-circle')],
-    ['compass', 'Browse public circles', 'Fajr Club, Sisters of Ṣabr, +1,200 more', () => router.push(`/public-circle/${FEATURED_CIRCLE.id}`)],
+    // Public circles live on the Circles tab, which needs setup to be finished first.
+    ...(onboarded ? [['compass', 'Browse public circles', 'Open circles anyone can join', () => router.push('/circles')] as [IconName, string, string, () => void]] : []),
   ];
 
   return (

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
-import { Av, Cell, Chip, glass, hairline, Kicker, Legend, Ring, RoundBtn, Tap } from '@/components/ui/primitives';
+import { Av, Cell, Chip, glass, hairline, Kicker, Legend, PausedChip, Ring, RoundBtn, Tap } from '@/components/ui/primitives';
 import { BackBar, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { isoDate, loadLogs, loadMemberSchedules, shortIn, statusRow, useMyCircles, useNow, useQuery } from '@/lib/data';
@@ -84,6 +84,7 @@ export default function CircleScreen() {
                 <Icon n={copied ? 'check' : 'copy'} s={15} />
               </Chip>
               <RoundBtn n="plus" onPress={() => router.push({ pathname: '/invite', params: { circle: c.id } })} />
+              <RoundBtn n="gear" onPress={() => router.push({ pathname: '/circle-settings/[id]', params: { id: c.id } })} />
             </>
           }
         />
@@ -155,13 +156,21 @@ export default function CircleScreen() {
                     {m.city ? ` · ${m.city}` : ''}
                   </T>
                 </View>
-                <RoundBtn n="together" s={36} onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, circle: c.id, mode: 'together' } })} />
-                <Tap
-                  onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, circle: c.id } })}
-                  accessibilityLabel={`Nudge ${m.name}`}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: SC.mint, alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon n="wave" s={17} c={SC.ink} w={2} />
-                </Tap>
+                {m.paused ? (
+                  <PausedChip />
+                ) : (
+                  c.nudgesEnabled && (
+                    <>
+                      <RoundBtn n="together" s={36} onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, circle: c.id, mode: 'together' } })} />
+                      <Tap
+                        onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, circle: c.id } })}
+                        accessibilityLabel={`Nudge ${m.name}`}
+                        style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: SC.mint, alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon n="wave" s={17} c={SC.ink} w={2} />
+                      </Tap>
+                    </>
+                  )
+                )}
               </Tap>
             </View>
           );
@@ -190,11 +199,15 @@ export default function CircleScreen() {
               {m.you ? 'You' : m.name}
               {m.timezone && <T style={{ fontSize: 12, opacity: 0.5 }}>{'  '}{formatTime(now, m.timezone, true)}</T>}
             </T>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {row.map((k, i) => (
-                <Cell key={i} k={k} s={20} />
-              ))}
-            </View>
+            {m.paused && !m.you ? (
+              <PausedChip />
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {row.map((k, i) => (
+                  <Cell key={i} k={k} s={20} />
+                ))}
+              </View>
+            )}
           </Tap>
         ))}
       </View>

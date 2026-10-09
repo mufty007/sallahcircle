@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.18"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       circle_members: {
@@ -94,6 +119,70 @@ export type Database = {
           {
             foreignKeyName: "circles_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      excused_periods: {
+        Row: {
+          created_at: string
+          ended_on: string | null
+          id: string
+          kind: Database["public"]["Enums"]["excuse_kind"]
+          started_on: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_on?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["excuse_kind"]
+          started_on: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          ended_on?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["excuse_kind"]
+          started_on?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "excused_periods_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fast_logs: {
+        Row: {
+          created_at: string
+          fasted_on: string
+          kind: Database["public"]["Enums"]["fast_kind"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fasted_on: string
+          kind: Database["public"]["Enums"]["fast_kind"]
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          fasted_on?: string
+          kind?: Database["public"]["Enums"]["fast_kind"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fast_logs_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -271,6 +360,7 @@ export type Database = {
         Row: {
           asr_method: Database["public"]["Enums"]["asr_method"]
           avatar_color: string
+          avatar_seed: string | null
           calc_method: number
           city: string | null
           country_code: string | null
@@ -281,14 +371,18 @@ export type Database = {
           latitude: number | null
           longitude: number | null
           onboarded_at: string | null
+          paused_since: string | null
           region: string | null
           timezone: string | null
+          track_excused: boolean
+          track_sunnah: boolean
           updated_at: string
           username: string | null
         }
         Insert: {
           asr_method?: Database["public"]["Enums"]["asr_method"]
           avatar_color?: string
+          avatar_seed?: string | null
           calc_method?: number
           city?: string | null
           country_code?: string | null
@@ -299,14 +393,18 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           onboarded_at?: string | null
+          paused_since?: string | null
           region?: string | null
           timezone?: string | null
+          track_excused?: boolean
+          track_sunnah?: boolean
           updated_at?: string
           username?: string | null
         }
         Update: {
           asr_method?: Database["public"]["Enums"]["asr_method"]
           avatar_color?: string
+          avatar_seed?: string | null
           calc_method?: number
           city?: string | null
           country_code?: string | null
@@ -317,8 +415,11 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           onboarded_at?: string | null
+          paused_since?: string | null
           region?: string | null
           timezone?: string | null
+          track_excused?: boolean
+          track_sunnah?: boolean
           updated_at?: string
           username?: string | null
         }
@@ -353,10 +454,44 @@ export type Database = {
           },
         ]
       }
+      qada_counts: {
+        Row: {
+          item: Database["public"]["Enums"]["qada_item"]
+          made_up: number
+          owed: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          item: Database["public"]["Enums"]["qada_item"]
+          made_up?: number
+          owed?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          item?: Database["public"]["Enums"]["qada_item"]
+          made_up?: number
+          owed?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qada_counts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reminder_settings: {
         Row: {
           allow_nudges: boolean
+          fasting_reminders: boolean
           heads_up_minutes: number
+          jumuah_reminder: boolean
           quiet_end: string | null
           quiet_start: string | null
           updated_at: string
@@ -364,7 +499,9 @@ export type Database = {
         }
         Insert: {
           allow_nudges?: boolean
+          fasting_reminders?: boolean
           heads_up_minutes?: number
+          jumuah_reminder?: boolean
           quiet_end?: string | null
           quiet_start?: string | null
           updated_at?: string
@@ -372,7 +509,9 @@ export type Database = {
         }
         Update: {
           allow_nudges?: boolean
+          fasting_reminders?: boolean
           heads_up_minutes?: number
+          jumuah_reminder?: boolean
           quiet_end?: string | null
           quiet_start?: string | null
           updated_at?: string
@@ -388,22 +527,95 @@ export type Database = {
           },
         ]
       }
+      sunnah_logs: {
+        Row: {
+          created_at: string
+          kind: Database["public"]["Enums"]["sunnah_kind"]
+          prayed_on: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          kind: Database["public"]["Enums"]["sunnah_kind"]
+          prayed_on: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          kind?: Database["public"]["Enums"]["sunnah_kind"]
+          prayed_on?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sunnah_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      circle_board: {
+        Args: { cid: string; since: string }
+        Returns: {
+          jamaah: number
+          late: number
+          on_time: number
+          points: number
+          user_id: string
+        }[]
+      }
       join_circle: { Args: { invite_code: string }; Returns: string }
+      member_streaks: {
+        Args: { uids: string[] }
+        Returns: {
+          streak: number
+          user_id: string
+        }[]
+      }
+      public_circles: {
+        Args: never
+        Returns: {
+          code: string
+          color: string
+          created_at: string
+          description: string
+          focus: string
+          id: string
+          joined: boolean
+          member_count: number
+          name: string
+        }[]
+      }
+      reset_circle_code: { Args: { cid: string }; Returns: string }
       username_available: { Args: { name: string }; Returns: boolean }
     }
     Enums: {
       asr_method: "standard" | "hanafi"
       circle_role: "owner" | "member"
       circle_visibility: "private" | "public"
+      excuse_kind: "hayd" | "nifas"
+      fast_kind: "ramadan" | "qada" | "sunnah" | "nafl"
       nudge_kind: "nudge" | "dua" | "together" | "voice"
       prayer_name: "fajr" | "dhuhr" | "asr" | "maghrib" | "isha"
       prayer_status: "on_time" | "late" | "missed"
+      qada_item: "fajr" | "dhuhr" | "asr" | "maghrib" | "isha" | "fast"
       reminder_sound: "adhan" | "chime" | "silent"
+      sunnah_kind:
+        | "fajr_before"
+        | "dhuhr_before"
+        | "dhuhr_after"
+        | "maghrib_after"
+        | "isha_after"
+        | "witr"
+        | "duha"
+        | "tahajjud"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -529,15 +741,31 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       asr_method: ["standard", "hanafi"],
       circle_role: ["owner", "member"],
       circle_visibility: ["private", "public"],
+      excuse_kind: ["hayd", "nifas"],
+      fast_kind: ["ramadan", "qada", "sunnah", "nafl"],
       nudge_kind: ["nudge", "dua", "together", "voice"],
       prayer_name: ["fajr", "dhuhr", "asr", "maghrib", "isha"],
       prayer_status: ["on_time", "late", "missed"],
+      qada_item: ["fajr", "dhuhr", "asr", "maghrib", "isha", "fast"],
       reminder_sound: ["adhan", "chime", "silent"],
+      sunnah_kind: [
+        "fajr_before",
+        "dhuhr_before",
+        "dhuhr_after",
+        "maghrib_after",
+        "isha_after",
+        "witr",
+        "duha",
+        "tahajjud",
+      ],
     },
   },
 } as const

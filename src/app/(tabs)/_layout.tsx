@@ -2,11 +2,13 @@ import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 
 import { TabBar } from '@/components/tab-bar';
+import { useLiveSync } from '@/lib/live';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
 export default function TabsLayout() {
-  const { loading, session, onboarded } = useSession();
+  const { loading, session, profile, onboarded } = useSession();
+  useLiveSync(onboarded ? session?.user.id : undefined, onboarded ? profile : null);
   if (loading) return null;
   if (!session) return <Redirect href="/welcome" />;
   if (!onboarded) return <Redirect href="/setup-name" />;

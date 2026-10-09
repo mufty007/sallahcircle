@@ -64,3 +64,14 @@ export async function continueWithEmail(email: string, password: string) {
   }
   if (!signUp.data.session) throw new Error('Check your inbox to confirm your email, then sign in.');
 }
+
+/** Permanently delete the signed-in account (server-side), then clear the local session. */
+export async function deleteAccount() {
+  const { data, error } = await supabase.functions.invoke('delete-account');
+  if (error) {
+    const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(body?.error ?? 'Couldn’t delete your account. Please try again.');
+  }
+  if (!data?.deleted) throw new Error('Couldn’t delete your account. Please try again.');
+  await supabase.auth.signOut({ scope: 'local' });
+}

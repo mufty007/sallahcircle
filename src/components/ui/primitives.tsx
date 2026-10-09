@@ -11,10 +11,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { Image } from 'expo-image';
 
 import type { PrayerStatus } from '@/data/mock';
+import { avatarUrl } from '@/lib/avatar';
 import { FONT, SC } from '@/theme/colors';
 
+import { revealFocusedInput } from './keyboard';
 import { Icon, type IconName } from './icon';
 import { InkContext, T, useInk } from './text';
 
@@ -36,17 +39,22 @@ export function Tap({ style, children, ...rest }: PressableProps & { style?: Sty
   );
 }
 
-type AvatarLike = { init: string; color: string };
+/** `seed` shows a Fun Emoji face on the colour; without one, the initial. */
+type AvatarLike = { init: string; color: string; seed?: string | null };
 
 export function Av({ m, s = 36, ring, style }: { m: AvatarLike; s?: number; ring?: string; style?: StyleProp<ViewStyle> }) {
   return (
     <View
       style={[
-        { width: s, height: s, borderRadius: s / 2, backgroundColor: m.color, alignItems: 'center', justifyContent: 'center' },
+        { width: s, height: s, borderRadius: s / 2, backgroundColor: m.color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
         ring ? { borderWidth: 3, borderColor: ring } : null,
         style,
       ]}>
-      <T style={{ color: SC.ink, fontWeight: '700', fontSize: s * 0.42 }}>{m.init}</T>
+      {m.seed ? (
+        <Image source={avatarUrl(m.seed, s)} style={{ width: s, height: s }} contentFit="cover" cachePolicy="memory-disk" transition={150} accessibilityIgnoresInvertColors />
+      ) : (
+        <T style={{ color: SC.ink, fontWeight: '700', fontSize: s * 0.42 }}>{m.init}</T>
+      )}
     </View>
   );
 }
@@ -235,6 +243,7 @@ export function Field({ label, hint, ok, ...input }: TextInputProps & { label: s
           {...input}
           onFocus={(e) => {
             setFocus(true);
+            revealFocusedInput();
             input.onFocus?.(e);
           }}
           onBlur={(e) => {
@@ -331,3 +340,12 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '500' },
   label: { fontSize: 13, opacity: 0.6, marginBottom: 8, fontWeight: '500' },
 });
+
+/** Neutral marker for a member on a break. Never says why. */
+export function PausedChip() {
+  return (
+    <Chip bg="rgba(255,255,255,0.08)" style={{ height: 28 }} textStyle={{ fontSize: 12, opacity: 0.7 }}>
+      Paused
+    </Chip>
+  );
+}

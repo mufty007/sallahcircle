@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { OBHead } from '@/components/onboarding';
@@ -48,7 +48,7 @@ export default function SignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <Screen
         bg="onboard"
         header={
@@ -114,6 +114,6 @@ export default function SignUpScreen() {
           By continuing you agree to the Terms and Privacy Policy.
         </T>
       </Screen>
-    </KeyboardAvoidingView>
+    </>
   );
 }
