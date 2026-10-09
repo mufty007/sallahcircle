@@ -1,7 +1,5 @@
-import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { OBHead, OBTop, useSetupNext } from '@/components/onboarding';
 import { Icon } from '@/components/ui/icon';
@@ -9,6 +7,7 @@ import { Btn, Chip, glass, hairline, Label, Toggle } from '@/components/ui/primi
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { formatTime, PRAYER_KEYS, PRAYER_LABEL, useDayTimes, type PrayerKey } from '@/lib/prayer-times';
+import { registerForNotifications } from '@/lib/notifications';
 import { supabase, type Enums } from '@/lib/supabase';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
@@ -26,21 +25,6 @@ const DEFAULTS: Record<PrayerKey, Reminder> = {
   maghrib: { enabled: true, sound: 'adhan' },
   isha: { enabled: true, sound: 'chime' },
 };
-
-/** Ask for notification permission and store the Expo push token (needs a development build). */
-async function registerPush(userId: string) {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') return false;
-  try {
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-    await supabase.from('push_tokens').upsert({ token, user_id: userId, platform: Platform.OS as 'ios' | 'android' | 'web', updated_at: new Date().toISOString() });
-  } catch (e) {
-    // Expo Go can't issue push tokens; local reminders still work.
-    console.warn('Push token unavailable', e);
-  }
-  return true;
-}
 
 export default function SetupRemindersScreen() {
   const next = useSetupNext();
@@ -93,7 +77,7 @@ export default function SetupRemindersScreen() {
         supabase.from('reminder_settings').upsert({ user_id: userId, heads_up_minutes: headsUp, allow_nudges: allowNudges }),
       ]);
       if (r.error || s.error) throw r.error ?? s.error;
-      if (askPermission && Platform.OS !== 'web') await registerPush(userId);
+      if (askPermission) await registerForNotifications(userId);
       next('/find-circle');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save reminders.');

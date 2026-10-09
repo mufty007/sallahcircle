@@ -1,95 +1,135 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
-import { Av, Cell, Chip, glass, RoundBtn, Tap } from '@/components/ui/primitives';
+import { Av, Cell, Chip, glass, Tap } from '@/components/ui/primitives';
 import { BackBar, Screen } from '@/components/ui/screen';
 import { InkContext, T } from '@/components/ui/text';
-import { memberById, type PrayerStatus } from '@/data/mock';
+import { isoDate, loadLogs, loadMemberSchedules, shortIn, statusRow, streakFrom, useMyCircles, useNow, useQuery } from '@/lib/data';
+import { formatTime, PRAYER_LABEL } from '@/lib/prayer-times';
+import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
-// Week grid: 5 prayers × 7 days, column-major like the design.
-const WEEK = [...Array(30).fill('d'), 'n'] as PrayerStatus[];
-WEEK[6] = 'l';
+const DAY = 86_400_000;
 
 export default function MemberScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const m = memberById(id);
+  const { id, circle: circleId } = useLocalSearchParams<{ id: string; circle?: string }>();
+  const { session, profile } = useSession();
+  const now = useNow(30_000);
+  const circles = useMyCircles(session?.user.id);
+  const shared = (circles.data ?? []).filter((c) => c.members.some((m) => m.id === id));
+  const m = shared.flatMap((c) => c.members).find((x) => x.id === id);
+  const circle = shared.find((c) => c.id === circleId) ?? shared[0];
+
+  const sched = useQuery(m ? `sched:${m.id}:${Math.floor(now.getTime() / 60_000)}` : null, () => loadMemberSchedules([m!]));
+  const s = sched.data?.[0];
+  const since = isoDate(new Date(now.getTime() - 60 * DAY), m?.timezone);
+  const logs = useQuery(m ? `member-logs:${m.id}:${since}` : null, () => loadLogs([m!.id], since));
+
+  if (!m) {
+    return (
+      <Screen bg="member" header={<BackBar />}>
+        <View style={{ marginTop: 80, alignItems: 'center' }}>
+          {circles.loading ? <ActivityIndicator color="#fff" /> : <T style={{ opacity: 0.7 }}>You don’t share a circle with this person.</T>}
+        </View>
+      </Screen>
+    );
+  }
+
+  const today = isoDate(now, m.timezone);
+  const all = logs.data ?? [];
+  const streak = streakFrom(all, m.id, today);
+  const onTime = all.length ? Math.round((all.filter((l) => l.status === 'on_time').length / all.length) * 100) : null;
+
+  // Last 7 days (oldest → today) in the member's own calendar.
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now.getTime() - (6 - i) * DAY);
+    return { date: isoDate(d, m.timezone), label: d.toLocaleDateString('en-US', { weekday: 'narrow', timeZone: m.timezone ?? undefined }) };
+  });
+  const grid = days.map(({ date }) => statusRow(all, m.id, date, date === today && s?.prayerDate === today ? s.next : undefined));
+  const weekLogged = days.reduce((n, { date }) => n + all.filter((l) => l.prayed_on === date && l.status !== 'missed').length, 0);
 
   return (
-    <Screen bg="member" header={<BackBar right={<RoundBtn n="more" />} />}>
+    <Screen bg="member" header={<BackBar />}>
       <View style={{ alignItems: 'center', marginTop: 4 }}>
         <Av m={m} s={88} />
         <T style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.8, marginTop: 12 }}>{m.name}</T>
         <T style={{ fontSize: 14, opacity: 0.65, marginTop: 2 }}>
-          {m.city} · it’s {m.local} there
+          {m.city ? `${m.city} · ` : ''}
+          {m.timezone ? `it’s ${formatTime(now, m.timezone, true)} there` : 'Location not set'}
         </T>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center', paddingHorizontal: 16 }}>
           <Chip>
             <Icon n="flame" s={15} c={SC.amber} />
-            {`${m.streak} days`}
+            {`${streak} day${streak === 1 ? '' : 's'}`}
           </Chip>
-          <Chip>98% on time</Chip>
-          <Chip>Fam · Sisters</Chip>
+          {onTime !== null && <Chip>{`${onTime}% on time`}</Chip>}
+          {shared.length > 0 && <Chip>{shared.map((c) => c.name).join(' · ')}</Chip>}
         </View>
       </View>
 
-      <View style={{ marginHorizontal: 16, marginTop: 24, borderRadius: 28, backgroundColor: SC.mint, padding: 18 }}>
-        <InkContext value={SC.ink}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View>
-              <T style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1.2, opacity: 0.6 }}>NEXT PRAYER</T>
-              <T style={{ fontSize: 30, fontWeight: '700', letterSpacing: -1, marginTop: 2 }}>
-                {m.next} in {m.nin}
-              </T>
-              <T style={{ fontSize: 14, opacity: 0.65 }}>
-                {m.at} {m.city} · 9:13 PM yours
-              </T>
+      {!m.you && (
+        <View style={{ marginHorizontal: 16, marginTop: 24, borderRadius: 28, backgroundColor: SC.mint, padding: 18 }}>
+          <InkContext value={SC.ink}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ flexShrink: 1 }}>
+                <T style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1.2, opacity: 0.6 }}>NEXT PRAYER</T>
+                <T style={{ fontSize: 30, fontWeight: '700', letterSpacing: -1, marginTop: 2 }}>
+                  {s ? `${PRAYER_LABEL[s.next]} in ${shortIn(s.at.getTime() - now.getTime())}` : m.place ? '…' : 'No location yet'}
+                </T>
+                {s && (
+                  <T style={{ fontSize: 14, opacity: 0.65 }}>
+                    {formatTime(s.at, m.timezone, true)}
+                    {m.city ? ` ${m.city}` : ''} · {formatTime(s.at, profile?.timezone, true)} yours
+                  </T>
+                )}
+              </View>
+              <Icon n="moon" s={28} w={1.6} />
             </View>
-            <Icon n="moon" s={28} w={1.6} />
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-            <Tap
-              onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id } })}
-              style={{ flex: 1, height: 46, borderRadius: 23, backgroundColor: SC.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <Icon n="wave" s={18} c="#fff" />
-              <T style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Nudge</T>
-            </Tap>
-            <Tap
-              onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, mode: 'dua' } })}
-              style={{ flex: 1, height: 46, borderRadius: 23, backgroundColor: 'rgba(11,18,32,0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <Icon n="heart" s={18} />
-              <T style={{ fontWeight: '600', fontSize: 15 }}>Send duʿāʾ</T>
-            </Tap>
-          </View>
-        </InkContext>
-      </View>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              <Tap
+                disabled={!circle}
+                onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, circle: circle?.id } })}
+                style={{ flex: 1, height: 46, borderRadius: 23, backgroundColor: SC.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon n="wave" s={18} c="#fff" />
+                <T style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Nudge</T>
+              </Tap>
+              <Tap
+                disabled={!circle}
+                onPress={() => router.push({ pathname: '/nudge/[id]', params: { id: m.id, circle: circle?.id, mode: 'dua' } })}
+                style={{ flex: 1, height: 46, borderRadius: 23, backgroundColor: 'rgba(11,18,32,0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon n="heart" s={18} />
+                <T style={{ fontWeight: '600', fontSize: 15 }}>Send duʿāʾ</T>
+              </Tap>
+            </View>
+          </InkContext>
+        </View>
+      )}
 
       <View style={[glass, { marginHorizontal: 16, marginTop: 16, padding: 16 }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-          <T style={{ fontSize: 14, fontWeight: '600' }}>This week</T>
-          <T style={{ fontSize: 14, opacity: 0.55 }}>30 of 31 so far</T>
+          <T style={{ fontSize: 14, fontWeight: '600' }}>Last 7 days</T>
+          <T style={{ fontSize: 14, opacity: 0.55 }}>{weekLogged} of 35 prayed</T>
         </View>
         <View style={{ flexDirection: 'row', marginBottom: 8 }}>
           <View style={{ width: 26 }} />
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          {days.map((d, i) => (
             <T key={i} style={{ flex: 1, fontSize: 11, opacity: 0.5, textAlign: 'center', fontWeight: '600' }}>
-              {d}
+              {d.label}
             </T>
           ))}
         </View>
         {['F', 'D', 'A', 'M', 'I'].map((p, r) => (
           <View key={p} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <T style={{ width: 26, fontSize: 11, opacity: 0.5, fontWeight: '600' }}>{p}</T>
-            {Array.from({ length: 7 }).map((_, c) => (
+            {grid.map((row, c) => (
               <View key={c} style={{ flex: 1, alignItems: 'center' }}>
-                <Cell k={c > 2 ? 'u' : (WEEK[c * 5 + r] ?? 'u')} s={20} />
+                <Cell k={row[r]} s={20} />
               </View>
             ))}
           </View>
         ))}
       </View>
-      <T style={{ marginTop: 16, textAlign: 'center', fontSize: 12, opacity: 0.45 }}>Nudges set to “gentle”: max 1 per prayer</T>
     </Screen>
   );
 }

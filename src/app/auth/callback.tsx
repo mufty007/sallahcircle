@@ -12,16 +12,17 @@ import { SC } from '@/theme/colors';
  */
 export default function AuthCallback() {
   const url = Linking.useLinkingURL();
-  const [done, setDone] = useState(false);
+  const [result, setResult] = useState<{ error?: string } | null>(null);
 
   useEffect(() => {
     if (!url) return;
     sessionFromUrl(url)
-      .catch((e) => console.warn('OAuth callback failed', e))
-      .finally(() => setDone(true));
+      .then(() => setResult({}))
+      .catch((e) => setResult({ error: e instanceof Error ? e.message : 'Sign-in failed' }));
   }, [url]);
 
-  if (done) return <Redirect href="/" />;
+  if (result?.error) return <Redirect href={{ pathname: '/sign-up', params: { error: result.error } }} />;
+  if (result) return <Redirect href="/" />;
   return (
     <View style={{ flex: 1, backgroundColor: SC.navy, alignItems: 'center', justifyContent: 'center' }}>
       <ActivityIndicator color={SC.mint} />

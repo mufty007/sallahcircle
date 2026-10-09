@@ -5,10 +5,22 @@ import { T } from '@/components/ui/text';
 import { PRAYERS, type PrayerStatus } from '@/data/mock';
 
 /** Today's five prayers with their status; the next one is highlighted. */
-export function PrayerRow({ st, dark, onPress }: { st: PrayerStatus[]; dark: boolean; onPress?: (index: number) => void }) {
+export function PrayerRow({
+  st,
+  dark,
+  onPress,
+  times,
+}: {
+  st: PrayerStatus[];
+  dark: boolean;
+  onPress?: (index: number) => void;
+  /** Displayed times for the five prayers (defaults to the design's sample day). */
+  times?: string[];
+}) {
   return (
     <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 16 }}>
-      {PRAYERS.map(([n, t], i) => {
+      {PRAYERS.map(([n, sample], i) => {
+        const t = times?.[i] ?? sample;
         const isN = st[i] === 'n';
         return (
           <Tap

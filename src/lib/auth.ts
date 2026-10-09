@@ -15,7 +15,14 @@ export async function sessionFromUrl(url: string) {
   const params = new URLSearchParams(`${query}&${hash}`);
 
   const error = params.get('error_description') ?? params.get('error');
-  if (error) throw new Error(error);
+  if (error) {
+    const code = params.get('error_code') ?? '';
+    throw new Error(
+      code === 'unexpected_failure' || /exchange external code/i.test(error)
+        ? 'Google sign-in isn’t configured correctly on the server. Please try email for now.'
+        : error.replace(/\+/g, ' '),
+    );
+  }
 
   const code = params.get('code');
   if (code) {
@@ -36,7 +43,7 @@ export async function signInWithGoogle() {
   const redirectTo = authRedirectUrl();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo, skipBrowserRedirect: true },
+    options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
   });
   if (error) throw error;
   const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);

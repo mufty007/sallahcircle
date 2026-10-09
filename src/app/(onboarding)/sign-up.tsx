@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -25,7 +25,8 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState<Busy>(null);
-  const [error, setError] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ error?: string }>();
+  const [error, setError] = useState<string | null>(params.error ?? null);
 
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
   const passwordOk = password.length >= 8;

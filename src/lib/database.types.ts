@@ -167,11 +167,45 @@ export type Database = {
           },
         ]
       }
-      prayer_logs: {
+      prayer_log_details: {
         Row: {
           at_masjid: boolean
-          id: string
           in_jamaah: boolean
+          log_id: string
+          user_id: string
+        }
+        Insert: {
+          at_masjid?: boolean
+          in_jamaah?: boolean
+          log_id: string
+          user_id?: string
+        }
+        Update: {
+          at_masjid?: boolean
+          in_jamaah?: boolean
+          log_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prayer_log_details_log_id_fkey"
+            columns: ["log_id"]
+            isOneToOne: true
+            referencedRelation: "prayer_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prayer_log_details_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prayer_logs: {
+        Row: {
+          id: string
           logged_at: string
           prayed_on: string
           prayer: Database["public"]["Enums"]["prayer_name"]
@@ -179,9 +213,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          at_masjid?: boolean
           id?: string
-          in_jamaah?: boolean
           logged_at?: string
           prayed_on: string
           prayer: Database["public"]["Enums"]["prayer_name"]
@@ -189,9 +221,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
-          at_masjid?: boolean
           id?: string
-          in_jamaah?: boolean
           logged_at?: string
           prayed_on?: string
           prayer?: Database["public"]["Enums"]["prayer_name"]

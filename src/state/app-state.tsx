@@ -1,31 +1,24 @@
 import { createContext, use, useState, type ReactNode } from 'react';
 
-import { PERIOD_ORDER, type PrayerStatus } from '@/data/mock';
+import { PERIOD_ORDER } from '@/data/mock';
 import type { Period } from '@/theme/colors';
 
 type AppState = {
-  period: Period;
-  setPeriod: (p: Period) => void;
-  cyclePeriod: () => void;
-  /** Today's log overrides by prayer index (local only until Supabase is wired). */
-  logged: Partial<Record<number, PrayerStatus>>;
-  logPrayer: (index: number, status: PrayerStatus) => void;
+  /** Manual sky preview (long-press the Today dial); null = follow the real time of day. */
+  skyOverride: Period | null;
+  cycleSky: () => void;
 };
 
 const Ctx = createContext<AppState | null>(null);
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [period, setPeriod] = useState<Period>('maghrib');
-  const [logged, setLogged] = useState<Partial<Record<number, PrayerStatus>>>({});
-
-  const value: AppState = {
-    period,
-    setPeriod,
-    cyclePeriod: () => setPeriod(PERIOD_ORDER[(PERIOD_ORDER.indexOf(period) + 1) % PERIOD_ORDER.length]),
-    logged,
-    logPrayer: (index, status) => setLogged((l) => ({ ...l, [index]: status })),
-  };
-  return <Ctx value={value}>{children}</Ctx>;
+  const [skyOverride, setSkyOverride] = useState<Period | null>(null);
+  const cycleSky = () =>
+    setSkyOverride((s) => {
+      const i = s ? PERIOD_ORDER.indexOf(s) + 1 : 0;
+      return i < PERIOD_ORDER.length ? PERIOD_ORDER[i] : null;
+    });
+  return <Ctx value={{ skyOverride, cycleSky }}>{children}</Ctx>;
 }
 
 export function useAppState() {

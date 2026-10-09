@@ -2,24 +2,27 @@ import { View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 
 import { Av } from '@/components/ui/primitives';
-import { PRAYER_HOURS, SUNRISE, type Member } from '@/data/mock';
+import { PRAYER_HOURS, SUNRISE } from '@/data/mock';
 import { FONT, SC } from '@/theme/colors';
 
 type DialProps = {
   now: number;
   dark: boolean;
-  queue?: [Member, string][];
+  queue?: [{ id: string; init: string; color: string }, string][];
+  /** Prayer names + decimal hours on the 24h ring (defaults to the design's sample day). */
+  prayers?: [string, number][];
+  sunrise?: number;
+  sunset?: number;
   size?: number;
   showLabels?: boolean;
 };
 
-const SUNSET = PRAYER_HOURS[3][1];
 
 /**
  * 24-hour dial: the sun/moon sits at the current time, each prayer is a node on
  * the ring, and circle members orbit on the inner track in the order they pray next.
  */
-export function OrbitDial({ now, dark, queue = [], size = 360, showLabels = true }: DialProps) {
+export function OrbitDial({ now, dark, queue = [], size = 360, showLabels = true, prayers = PRAYER_HOURS, sunrise = SUNRISE, sunset = PRAYER_HOURS[3][1] }: DialProps) {
   const cx = size / 2;
   const cy = size / 2;
   const R = size / 2 - 40;
@@ -39,24 +42,24 @@ export function OrbitDial({ now, dark, queue = [], size = 360, showLabels = true
     return `M${x1} ${y1} A${r} ${r} 0 ${d > 12 ? 1 : 0} 1 ${x2} ${y2}`;
   };
 
-  const ni = PRAYER_HOURS.findIndex(([, h]) => h > now);
+  const ni = prayers.findIndex(([, h]) => h > now);
   const nextI = ni < 0 ? 0 : ni;
   const [sx, sy] = pt(now, R);
-  const day = now > SUNRISE && now < SUNSET;
-  const lastH = [...PRAYER_HOURS].reverse().find(([, h]) => h <= now)?.[1] ?? PRAYER_HOURS[4][1];
+  const day = now > sunrise && now < sunset;
+  const lastH = [...prayers].reverse().find(([, h]) => h <= now)?.[1] ?? prayers[4][1];
 
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
         <Circle cx={cx} cy={cy} r={R} fill="none" stroke={faint} />
-        <Path d={arc(SUNRISE, SUNSET, R)} fill="none" stroke={dark ? 'rgba(255,231,176,0.28)' : 'rgba(255,255,255,0.7)'} strokeWidth={8} strokeLinecap="round" />
+        <Path d={arc(sunrise, sunset, R)} fill="none" stroke={dark ? 'rgba(255,231,176,0.28)' : 'rgba(255,255,255,0.7)'} strokeWidth={8} strokeLinecap="round" />
         <Path d={arc(lastH, now, R)} fill="none" stroke={dark ? SC.mint : SC.green} strokeWidth={2.5} strokeLinecap="round" />
         {Array.from({ length: 24 }).map((_, h) => {
           const [a, b] = pt(h, R - 12);
           const [c, d] = pt(h, R - (h % 6 ? 16 : 22));
           return <Line key={h} x1={a} y1={b} x2={c} y2={d} stroke={faint} strokeWidth={1.2} />;
         })}
-        {PRAYER_HOURS.map(([n, h], i) => {
+        {prayers.map(([n, h], i) => {
           const [x, y] = pt(h, R);
           const [lx, ly] = pt(h, R + 22);
           const past = h < now;

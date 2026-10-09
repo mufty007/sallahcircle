@@ -4,15 +4,19 @@ import { ScrollView, TextInput, View } from 'react-native';
 
 import { Background } from '@/components/ui/background';
 import { Icon } from '@/components/ui/icon';
-import { Av, Chip, glass, hairline, Kicker, Ring, Stars, Tap } from '@/components/ui/primitives';
+import { Av, Chip, glass, hairline, Kicker, Stars, Tap } from '@/components/ui/primitives';
 import { PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { FEATURED_CIRCLE, MEMBERS, MY_CIRCLE, PUBLIC_CIRCLES } from '@/data/mock';
+import { FEATURED_CIRCLE, PUBLIC_CIRCLES } from '@/data/mock';
+import { useMyCircles } from '@/lib/data';
+import { useSession } from '@/state/session';
 import { FONT, SC } from '@/theme/colors';
 
 const FILTERS = ['For you', 'Fajr', 'Sisters', 'Brothers', 'Students'];
 
 export default function DiscoverScreen() {
+  const { session } = useSession();
+  const mine = useMyCircles(session?.user.id);
   const [filter, setFilter] = useState(FILTERS[0]);
   const [query, setQuery] = useState('');
   const [joined, setJoined] = useState<Record<string, boolean>>({});
@@ -75,23 +79,47 @@ export default function DiscoverScreen() {
       </Tap>
 
       <Kicker style={{ marginTop: 22, marginHorizontal: 24, marginBottom: 8 }}>YOUR CIRCLES</Kicker>
-      <Tap onPress={() => router.push(`/circle/${MY_CIRCLE.id}`)} style={[glass, { marginHorizontal: 16, paddingHorizontal: 16, height: 74, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-        <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: MEMBERS[0].color, alignItems: 'center', justifyContent: 'center' }}>
-          <T style={{ color: SC.ink, fontWeight: '700', fontSize: 17 }}>F</T>
+      {mine.data?.length ? (
+        <View style={{ marginHorizontal: 16, gap: 8 }}>
+          {mine.data.map((c) => {
+            const others = c.members.filter((m) => !m.you);
+            return (
+              <Tap
+                key={c.id}
+                onPress={() => router.push({ pathname: '/circle/[id]', params: { id: c.id } })}
+                style={[glass, { paddingHorizontal: 16, height: 74, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+                <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: c.color, alignItems: 'center', justifyContent: 'center' }}>
+                  <T style={{ color: SC.ink, fontWeight: '700', fontSize: 17 }}>{c.name[0]?.toUpperCase()}</T>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <T style={{ fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
+                    {c.name}
+                  </T>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <View style={{ flexDirection: 'row' }}>
+                      {others.slice(0, 4).map((m, i) => (
+                        <Av key={m.id} m={m} s={18} style={{ marginLeft: i ? -5 : 0, borderWidth: 1.5, borderColor: SC.navy }} />
+                      ))}
+                    </View>
+                    <T style={{ fontSize: 12, opacity: 0.55 }}>
+                      {c.members.length} member{c.members.length === 1 ? '' : 's'} · {c.code}
+                    </T>
+                  </View>
+                </View>
+                <Icon n="chev" s={18} c="rgba(255,255,255,0.4)" />
+              </Tap>
+            );
+          })}
+          <Tap onPress={() => router.push('/find-circle')} style={{ paddingVertical: 8, alignItems: 'center' }}>
+            <T style={{ fontSize: 14, color: SC.mint, fontWeight: '600' }}>Join with a code</T>
+          </Tap>
         </View>
-        <View style={{ flex: 1 }}>
-          <T style={{ fontSize: 16, fontWeight: '600' }}>{MY_CIRCLE.name}</T>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <View style={{ flexDirection: 'row' }}>
-              {MEMBERS.slice(1, 5).map((m, i) => (
-                <Av key={m.id} m={m} s={18} style={{ marginLeft: i ? -5 : 0, borderWidth: 1.5, borderColor: SC.navy }} />
-              ))}
-            </View>
-            <T style={{ fontSize: 12, opacity: 0.55 }}>2 could use a nudge</T>
-          </View>
-        </View>
-        <Ring pct={MY_CIRCLE.onTime} size={44} stroke={4} label="84%" labelSize={11} />
-      </Tap>
+      ) : (
+        <Tap onPress={() => router.push('/find-circle')} style={[glass, { marginHorizontal: 16, padding: 16 }]}>
+          <T style={{ fontSize: 15, fontWeight: '600' }}>{mine.loading ? 'Loading…' : 'You’re not in a circle yet'}</T>
+          {!mine.loading && <T style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>Join with an invite code or create one →</T>}
+        </Tap>
+      )}
 
       <Kicker style={{ marginTop: 22, marginHorizontal: 24, marginBottom: 8 }}>POPULAR</Kicker>
       <View style={[glass, { marginHorizontal: 16, paddingVertical: 4, paddingHorizontal: 16 }]}>

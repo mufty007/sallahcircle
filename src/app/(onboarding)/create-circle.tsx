@@ -5,6 +5,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } fr
 import { Btn, Chip, Field, glass, hairline, Label, RoundBtn, Segmented, Toggle } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
+import { invalidate } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { AVATAR_COLORS, SC } from '@/theme/colors';
 
@@ -34,6 +35,7 @@ export default function CreateCircleScreen() {
       setError(e.message);
       return;
     }
+    invalidate();
     router.push({ pathname: '/invite', params: { circle: data.id } });
   };
 

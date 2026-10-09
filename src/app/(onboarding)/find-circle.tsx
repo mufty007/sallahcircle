@@ -8,7 +8,9 @@ import { Btn, Label, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { FEATURED_CIRCLE } from '@/data/mock';
+import { invalidate } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
+import { useSession } from '@/state/session';
 import { mintA, SC } from '@/theme/colors';
 
 const LEN = 6;
@@ -19,6 +21,7 @@ export default function FindCircleScreen() {
   const [focused, setFocused] = useState(false);
   const input = useRef<TextInput>(null);
   const complete = code.length === LEN;
+  const { onboarded } = useSession();
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +34,9 @@ export default function FindCircleScreen() {
       setError(e.code === 'P0002' ? 'No circle found for that code. Check it and try again.' : e.message);
       return;
     }
-    router.push({ pathname: '/all-set', params: { circle: data } });
+    invalidate();
+    if (onboarded) router.replace({ pathname: '/circle/[id]', params: { id: data } });
+    else router.push({ pathname: '/all-set', params: { circle: data } });
   };
 
   const options: [IconName, string, string, () => void][] = [

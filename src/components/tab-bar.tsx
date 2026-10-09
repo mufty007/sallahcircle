@@ -6,8 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/ui/icon';
 import { InkContext, T } from '@/components/ui/text';
-import { PERIODS } from '@/data/mock';
-import { useAppState } from '@/state/app-state';
+import { useMyDay } from '@/lib/today';
 import { SC } from '@/theme/colors';
 
 const ITEMS: Record<string, [IconName, string]> = {
@@ -21,9 +20,9 @@ const ITEMS: Record<string, [IconName, string]> = {
 /** Floating glass pill tab bar from the design. Goes light on the daytime Today sky. */
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { period } = useAppState();
+  const { dark: skyDark } = useMyDay(60_000);
   const activeName = state.routes[state.index]?.name;
-  const dark = activeName !== 'index' || PERIODS[period].dark;
+  const dark = activeName !== 'index' || skyDark;
   const bg = dark ? 'rgba(8,12,28,0.62)' : 'rgba(255,255,255,0.78)';
   const fg = dark ? 'rgba(255,255,255,0.7)' : 'rgba(11,18,32,0.6)';
 
