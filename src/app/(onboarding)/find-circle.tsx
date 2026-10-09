@@ -1,0 +1,102 @@
+import { router } from 'expo-router';
+import { useRef, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
+
+import { OBHead, OBTop } from '@/components/onboarding';
+import { Icon, type IconName } from '@/components/ui/icon';
+import { Btn, Label, Tap } from '@/components/ui/primitives';
+import { Screen } from '@/components/ui/screen';
+import { T } from '@/components/ui/text';
+import { FEATURED_CIRCLE } from '@/data/mock';
+import { mintA, SC } from '@/theme/colors';
+
+const LEN = 6;
+
+export default function FindCircleScreen() {
+  const [code, setCode] = useState('BGQB');
+  const [focused, setFocused] = useState(false);
+  const input = useRef<TextInput>(null);
+  const complete = code.length === LEN;
+
+  const options: [IconName, string, string, () => void][] = [
+    ['plus', 'Create a circle', 'For family, friends or your MSA', () => router.push('/create-circle')],
+    ['compass', 'Browse public circles', 'Fajr Club, Sisters of Ṣabr, +1,200 more', () => router.push(`/public-circle/${FEATURED_CIRCLE.id}`)],
+  ];
+
+  return (
+    <Screen
+      bg="onboard"
+      header={<OBTop step={5} skipTo="/all-set" />}
+      footer={
+        <Btn kind={complete ? 'mint' : 'ghost'} disabled={!complete} style={{ opacity: complete ? 1 : 0.5 }} onPress={() => router.push('/all-set')}>
+          Join circle
+        </Btn>
+      }>
+      <OBHead k="STEP 5 OF 5" t="Find your circle" sub="Join friends with a code, or start one of your own." />
+      <View style={{ marginTop: 28, paddingHorizontal: 16 }}>
+        <Label>Invite code</Label>
+        <Pressable onPress={() => input.current?.focus()} style={{ flexDirection: 'row', gap: 8 }}>
+          {Array.from({ length: LEN }).map((_, i) => {
+            const active = focused && i === Math.min(code.length, LEN - 1);
+            return (
+              <View
+                key={i}
+                style={{
+                  flex: 1,
+                  height: 62,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(255,255,255,0.07)',
+                  borderWidth: 1.5,
+                  borderColor: active ? SC.mint : 'rgba(255,255,255,0.1)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <T style={{ fontSize: 26, fontWeight: '700' }}>{code[i] ?? ''}</T>
+              </View>
+            );
+          })}
+        </Pressable>
+        {/* Hidden input drives the six boxes. */}
+        <TextInput
+          ref={input}
+          value={code}
+          onChangeText={(t) => setCode(t.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, LEN))}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={LEN}
+          style={{ position: 'absolute', opacity: 0, height: 1, width: 1 }}
+        />
+      </View>
+
+      <View style={{ marginTop: 40, paddingHorizontal: 16, gap: 10 }}>
+        {options.map(([ic, t, s, onPress], i) => (
+          <Tap
+            key={t}
+            onPress={onPress}
+            style={{
+              height: 92,
+              borderRadius: 26,
+              backgroundColor: i ? 'rgba(255,255,255,0.05)' : mintA(0.1),
+              borderWidth: 1,
+              borderColor: i ? 'rgba(255,255,255,0.07)' : mintA(0.4),
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 14,
+              paddingHorizontal: 18,
+            }}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: i ? 'rgba(255,255,255,0.1)' : SC.mint, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon n={ic} s={22} c={i ? '#fff' : SC.ink} w={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <T style={{ fontSize: 17, fontWeight: '600' }}>{t}</T>
+              <T style={{ fontSize: 13, opacity: 0.6 }}>{s}</T>
+            </View>
+            <Icon n="chev" s={18} c="rgba(255,255,255,0.5)" />
+          </Tap>
+        ))}
+      </View>
+    </Screen>
+  );
+}
