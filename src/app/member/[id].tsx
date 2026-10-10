@@ -29,8 +29,8 @@ export default function MemberScreen() {
   const sched = useQuery(m ? `sched:${m.id}:${Math.floor(now.getTime() / 60_000)}` : null, () => loadMemberSchedules([m!]));
   const s = sched.data?.[0];
   const since = isoDate(new Date(now.getTime() - 60 * DAY), m?.timezone);
-  const logs = useQuery(m ? `member-logs:${m.id}:${since}` : null, () => loadLogs([m!.id], since));
-  const streaks = useQuery(m ? `streaks:${m.id}:${since}` : null, () => loadStreaks([m!.id]));
+  const logs = useQuery(m ? `member-logs:${m.id}:${since}` : null, () => loadLogs([m?.id ?? ''], since));
+  const streaks = useQuery(m ? `streaks:${m.id}:${since}` : null, () => loadStreaks([m?.id ?? '']));
 
   if (!m) {
     return (

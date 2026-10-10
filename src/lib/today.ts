@@ -43,9 +43,10 @@ export function useMyDay(tickMs = 1000) {
   );
 
   let next: { key: PrayerKey; at: Date; date: string } | null = null;
-  if (today.data) {
-    const key = PRAYER_KEYS.find((p) => today.data!.times[p] > now);
-    if (key) next = { key, at: today.data.times[key], date: todayIso };
+  const day = today.data;
+  if (day) {
+    const key = PRAYER_KEYS.find((p) => day.times[p] > now);
+    if (key) next = { key, at: day.times[key], date: todayIso };
     else if (tomorrow.data) next = { key: 'fajr', at: tomorrow.data.times.fajr, date: isoDate(tomorrow.data.times.fajr, tz) };
   }
 
@@ -64,12 +65,12 @@ export function useMyDay(tickMs = 1000) {
     next,
     sky,
     dark: SKY_IS_DARK[sky],
-    dial: today.data
+    dial: day
       ? {
           now: hour(now),
-          prayers: PRAYER_KEYS.map((p) => [PRAYER_LABEL[p], hour(today.data!.times[p])] as [string, number]),
-          sunrise: hour(today.data.sunrise),
-          sunset: hour(today.data.sunset),
+          prayers: PRAYER_KEYS.map((p) => [PRAYER_LABEL[p], hour(day.times[p])] as [string, number]),
+          sunrise: hour(day.sunrise),
+          sunset: hour(day.sunset),
         }
       : null,
   };

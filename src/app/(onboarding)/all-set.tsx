@@ -25,7 +25,7 @@ export default function AllSetScreen() {
       ? { latitude: profile.latitude, longitude: profile.longitude, timezone: profile.timezone }
       : null;
   const next = useAsync(place ? `next:${place.latitude},${place.longitude},${profile?.calc_method},${profile?.asr_method}` : null, async () => {
-    const n = await fetchNextPrayer(place!, profile!.calc_method, profile!.asr_method);
+    const n = await fetchNextPrayer(place!, profile?.calc_method ?? 2, profile?.asr_method ?? 'standard');
     return { ...n, inMs: n.at.getTime() - Date.now() };
   });
   const circle = useAsync(circleId ? `circle-name:${circleId}` : null, async () => {

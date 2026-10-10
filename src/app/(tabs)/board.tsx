@@ -25,11 +25,11 @@ export default function BoardScreen() {
   const since = weekStart(today);
   const daysLeft = 7 - Math.round((Date.parse(today) - Date.parse(since)) / 86_400_000);
   const boardOn = circle?.leaderboardEnabled !== false;
-  const board = useQuery(circle && boardOn ? `board:${circle.id}:${since}` : null, () => loadBoard(circle!.id, since));
+  const board = useQuery(circle && boardOn ? `board:${circle.id}:${since}` : null, () => loadBoard(circle?.id ?? '', since));
   const ids = circle?.members.map((m) => m.id) ?? [];
   const streaks = useQuery(ids.length ? `streaks:${ids.join(',')}:${today}` : null, () => loadStreaks(ids));
 
-  const rows = (board.data ?? []).map((r) => ({ ...r, m: circle!.members.find((x) => x.id === r.userId)! })).filter((r) => r.m);
+  const rows = (board.data ?? []).map((r) => ({ ...r, m: circle?.members.find((x) => x.id === r.userId)! })).filter((r) => r.m);
   const myIndex = rows.findIndex((r) => r.m.you);
   const mine = rows[myIndex];
   const ahead = myIndex > 0 ? rows[myIndex - 1] : null;
@@ -102,7 +102,7 @@ export default function BoardScreen() {
               <Tap
                 key={r.m.id}
                 disabled={you}
-                onPress={() => router.push({ pathname: '/member/[id]', params: { id: r.m.id, circle: circle!.id } })}
+                onPress={() => router.push({ pathname: '/member/[id]', params: { id: r.m.id, circle: circle?.id } })}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',

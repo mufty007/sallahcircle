@@ -71,7 +71,7 @@ export default function FastingScreen() {
   // Ramaḍān grid: Hijri day N ↔ today − (todayHijriDay − N).
   const hDay = Number(hijri?.day ?? 0);
   const ramadanCells = ramadan
-    ? Array.from({ length: hijri!.month.days || 30 }, (_, i) => {
+    ? Array.from({ length: hijri?.month.days || 30 }, (_, i) => {
         const date = addDays(todayIso, i + 1 - hDay);
         return { n: i + 1, date, fasted: !!fasts.data?.some((f) => f.fastedOn === date), future: date > todayIso };
       })

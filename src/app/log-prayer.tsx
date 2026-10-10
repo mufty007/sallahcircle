@@ -26,7 +26,7 @@ function LogPrayerContent() {
 
   const prayer: PrayerKey = PRAYER_KEYS.includes(params.prayer as PrayerKey) ? (params.prayer as PrayerKey) : (next?.key ?? 'fajr');
   const date = params.date ?? isoDate(now, tz);
-  const existing = useQuery(profile ? `mylog:${profile.id}:${prayer}:${date}` : null, () => loadMyLog(profile!.id, prayer, date));
+  const existing = useQuery(profile ? `mylog:${profile.id}:${prayer}:${date}` : null, () => loadMyLog(profile?.id ?? '', prayer, date));
 
   if (!profile || existing.loading) {
     return (

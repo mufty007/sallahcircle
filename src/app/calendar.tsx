@@ -27,7 +27,7 @@ export default function CalendarScreen() {
   const hijri = useQuery(`hijri:${monthKey}:${offset}`, () => fetchHijriMonthAdjusted(ym.y, ym.m, offset));
   const place = profile?.latitude != null && profile.longitude != null ? { latitude: profile.latitude, longitude: profile.longitude, timezone: tz } : null;
   const times = useQuery(place ? `month:${monthKey}:${place.latitude},${place.longitude},${profile?.calc_method},${profile?.asr_method}` : null, () =>
-    fetchMonth(place!, profile!.calc_method, profile!.asr_method, ym.y, ym.m),
+    fetchMonth(place!, profile?.calc_method ?? 2, profile?.asr_method ?? 'standard', ym.y, ym.m),
   );
   const logs = useQuery(me ? `cal-logs:${me}:${monthKey}` : null, () => loadLogs([me!], `${monthKey}-01`));
 

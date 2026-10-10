@@ -75,8 +75,11 @@ export default function MasjidsScreen() {
   }, [profile?.latitude, profile?.longitude]);
 
   // Rounded to ~1 km so the cache is reused and your exact position isn't in the key.
-  const key = here ? `masjids:${here.lat.toFixed(2)},${here.lng.toFixed(2)}:${radius}` : null;
-  const list = useQuery(key, () => findMasjids(here!.lat, here!.lng, radius));
+  // Plain values (not `here!.lat`): the React Compiler reads member paths as dependencies on every render.
+  const lat = here?.lat ?? null;
+  const lng = here?.lng ?? null;
+  const key = lat != null && lng != null ? `masjids:${lat.toFixed(2)},${lng.toFixed(2)}:${radius}` : null;
+  const list = useQuery(key, () => findMasjids(lat!, lng!, radius));
 
   return (
     <Screen bg="navy" header={<BackBar />}>
