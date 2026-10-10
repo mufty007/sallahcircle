@@ -11,6 +11,7 @@ import { Btn, glass } from '@/components/ui/primitives';
 import { PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { MAKKAH } from '@/data/mock';
+import { distanceUnit, formatDistance, type DistanceUnit } from '@/lib/units';
 import { useSession } from '@/state/session';
 import { FONT, mintA, SC } from '@/theme/colors';
 
@@ -57,10 +58,10 @@ export default function QiblaScreen() {
     );
   }
 
-  return <QiblaView lng={profile.longitude} lat={profile.latitude} city={profile.city} heading={heading} size={size} />;
+  return <QiblaView lng={profile.longitude} lat={profile.latitude} city={profile.city} heading={heading} size={size} unit={distanceUnit(profile)} />;
 }
 
-function QiblaView({ lng, lat, city, heading, size }: { lng: number; lat: number; city: string | null; heading: number | null; size: number }) {
+function QiblaView({ lng, lat, city, heading, size, unit }: { lng: number; lat: number; city: string | null; heading: number | null; size: number; unit: DistanceUnit }) {
   // Primitive inputs let the compiler memoize these, so compass ticks don't re-project the globe.
   const home: [number, number] = [lng, lat];
   const brg = bearing(home, MAKKAH);
@@ -81,7 +82,7 @@ function QiblaView({ lng, lat, city, heading, size }: { lng: number; lat: number
         <T style={{ paddingBottom: 10, fontSize: 15, opacity: 0.7, lineHeight: 20 }}>
           {compassWord(brg)}
           {'\n'}
-          {km.toLocaleString()} km to Makkah
+          {formatDistance(km, unit)} to Makkah
         </T>
       </View>
 

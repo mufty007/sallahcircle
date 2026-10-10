@@ -399,6 +399,7 @@ export type Database = {
           country_code: string | null
           created_at: string
           display_name: string | null
+          distance_unit: string | null
           friend_code: string
           hijri_offset: number
           id: string
@@ -422,6 +423,7 @@ export type Database = {
           country_code?: string | null
           created_at?: string
           display_name?: string | null
+          distance_unit?: string | null
           friend_code?: string
           hijri_offset?: number
           id: string
@@ -445,6 +447,7 @@ export type Database = {
           country_code?: string | null
           created_at?: string
           display_name?: string | null
+          distance_unit?: string | null
           friend_code?: string
           hijri_offset?: number
           id?: string

@@ -10,6 +10,7 @@ import { invalidate, useQuery } from '@/lib/data';
 import { deleteAccount } from '@/lib/auth';
 import { AVATAR_CREDIT } from '@/lib/avatar';
 import { exportMyData } from '@/lib/export';
+import { distanceUnit } from '@/lib/units';
 import { notificationsSupported, unregisterDevice } from '@/lib/notifications';
 import { clearReminders, syncReminders } from '@/lib/reminders';
 import { METHODS, PRAYER_KEYS, PRAYER_LABEL } from '@/lib/prayer-times';
@@ -93,6 +94,11 @@ export default function SettingsScreen() {
         { label: 'Calculation', value: method, href: '/setup-method' },
         { label: 'Asr', value: profile?.asr_method === 'hanafi' ? 'Ḥanafī' : 'Standard', href: '/setup-method' },
         { label: 'Source', value: 'AlAdhan' },
+        {
+          label: 'Distances',
+          value: distanceUnit(profile) === 'mi' ? 'Miles' : 'Kilometres',
+          onPress: () => updateProfile({ distance_unit: distanceUnit(profile) === 'mi' ? 'km' : 'mi' }).catch(() => {}),
+        },
         {
           label: 'Hijri date',
           value: hijriLabel(profile?.hijri_offset ?? 0),

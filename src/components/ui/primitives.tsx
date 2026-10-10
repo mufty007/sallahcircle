@@ -99,6 +99,7 @@ export function Chip({
   onPress,
   textStyle,
   selected,
+  accessibilityLabel,
 }: {
   children: ReactNode;
   bg?: string;
@@ -108,6 +109,7 @@ export function Chip({
   onPress?: () => void;
   /** Screen-reader state for chips used as choices. */
   selected?: boolean;
+  accessibilityLabel?: string;
 }) {
   const ink = useInk();
   const color = c ?? ink;
@@ -121,7 +123,7 @@ export function Chip({
     </InkContext>
   );
   return (
-    <Tap disabled={!onPress} onPress={onPress} accessibilityState={selected != null ? { selected } : undefined} hitSlop={6} style={[styles.chip, { backgroundColor: bg }, style]}>
+    <Tap disabled={!onPress} onPress={onPress} accessibilityState={selected != null ? { selected } : undefined} accessibilityLabel={accessibilityLabel} hitSlop={6} style={[styles.chip, { backgroundColor: bg }, style]}>
       {body}
     </Tap>
   );
