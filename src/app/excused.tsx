@@ -2,32 +2,19 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
-import { Btn, Chip, glass, hairline, Kicker, Label, Segmented, Tap } from '@/components/ui/primitives';
+import { Btn, Chip, glass, hairline, Kicker, Label, Ring, Segmented, Tap } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { deleteExcused, endExcused, isoDate, startExcused, useExcused, useNow, type ExcusedPeriod } from '@/lib/data';
+import { addDays, cycleInfo, daysBetween, niceDate } from '@/lib/cycle';
+import { deleteExcused, endExcused, excusedDates, isoDate, startExcused, useExcused, useNow } from '@/lib/data';
 import type { Enums } from '@/lib/supabase';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
-const DAY = 86_400_000;
 const KIND_LABEL: Record<Enums<'excuse_kind'>, string> = { hayd: 'Ḥayḍ', nifas: 'Nifās' };
-
-const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY) + 1;
-const nice = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
-
-/** Private, on-device estimates from past ḥayḍ periods. */
-function insights(periods: ExcusedPeriod[]) {
-  const hayd = periods.filter((p) => p.kind === 'hayd' && p.endedOn).sort((a, b) => a.startedOn.localeCompare(b.startedOn));
-  if (hayd.length < 2) return null;
-  const lengths = hayd.map((p) => days(p.startedOn, p.endedOn!));
-  const gaps = hayd.slice(1).map((p, i) => days(hayd[i].startedOn, p.startedOn) - 1);
-  const avg = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
-  const cycle = avg(gaps);
-  const allStarts = periods.filter((p) => p.kind === 'hayd').map((p) => p.startedOn).sort();
-  return { length: avg(lengths), cycle, next: addDays(allStarts[allStarts.length - 1], cycle) };
-}
+const LILAC = '#C7AFF5';
+const days = daysBetween;
+const nice = niceDate;
 
 export default function ExcusedScreen() {
   const { session, profile, refreshProfile } = useSession();
@@ -55,7 +42,11 @@ export default function ExcusedScreen() {
   };
 
   const past = (periods.data ?? []).filter((p) => p.endedOn);
-  const stats = insights(periods.data ?? []);
+  const c = cycleInfo(periods.data, today);
+  const stats = c.avgLength && c.avgCycle ? { length: c.avgLength, cycle: c.avgCycle, next: c.nextStart } : null;
+  const excusedSet = excusedDates(periods.data, today);
+  // Last six weeks, oldest first, for the strip.
+  const strip = Array.from({ length: 42 }, (_, i) => addDays(today, i - 41));
 
   return (
     <Screen bg="navy" header={<BackBar />}>
@@ -65,12 +56,57 @@ export default function ExcusedScreen() {
       </T>
       {error && <T style={{ color: SC.coral, fontSize: 14, marginTop: 10, marginHorizontal: 24 }}>{error}</T>}
 
+      {periods.data && (
+        <View style={[glass, { marginHorizontal: 16, marginTop: 18, padding: 18 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <Ring
+              pct={open ? Math.min(1, (c.day ?? 0) / (c.avgLength ?? 7)) : c.day && c.avgCycle ? Math.min(1, c.day / c.avgCycle) : 0}
+              size={92}
+              stroke={8}
+              label={c.day != null ? String(c.day) : '–'}
+              labelSize={28}
+            />
+            <View style={{ flex: 1 }}>
+              <T style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1, opacity: 0.55 }}>{open ? 'EXCUSED' : 'CYCLE DAY'}</T>
+              <T style={{ fontSize: 20, fontWeight: '700', marginTop: 2 }}>
+                {open ? `${KIND_LABEL[open.kind]} · day ${c.day}` : c.day != null ? `Day ${c.day}${c.avgCycle ? ` of ~${c.avgCycle}` : ''}` : 'Nothing logged yet'}
+              </T>
+              <T style={{ fontSize: 13, opacity: 0.6, marginTop: 4, lineHeight: 18 }}>
+                {open
+                  ? `Started ${nice(open.startedOn)}${c.avgLength ? ` · usually ${c.avgLength} days` : ''}`
+                  : c.nextStart && c.daysUntilNext != null
+                    ? c.daysUntilNext >= 0
+                      ? `Next expected around ${nice(c.nextStart)}`
+                      : `Expected ${nice(c.nextStart)} · ${-c.daysUntilNext} days ago`
+                    : 'Log a couple of periods to see estimates.'}
+              </T>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 16 }} accessible accessibilityLabel={`Last six weeks: ${[...excusedSet].filter((d) => d >= strip[0]).length} excused days`}>
+            {strip.map((d) => (
+              <View
+                key={d}
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: excusedSet.has(d) ? LILAC : 'rgba(255,255,255,0.08)',
+                  borderWidth: d === today ? 1.5 : 0,
+                  borderColor: '#fff',
+                }}
+              />
+            ))}
+          </View>
+          <T style={{ fontSize: 11, opacity: 0.45, marginTop: 8 }}>Last 6 weeks · lilac = excused</T>
+        </View>
+      )}
+
       {periods.loading && !periods.data ? (
         <ActivityIndicator style={{ marginTop: 40 }} color="#fff" />
       ) : open ? (
         <View style={[glass, { marginHorizontal: 16, marginTop: 20, padding: 18 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Icon n="moon" s={22} c={SC.mint} />
+            <Icon n="moon" s={22} c={LILAC} />
             <T style={{ fontSize: 18, fontWeight: '700' }}>{`${KIND_LABEL[open.kind]} · day ${days(open.startedOn, today)}`}</T>
           </View>
           <T style={{ fontSize: 13, opacity: 0.6, marginTop: 4 }}>Since {nice(open.startedOn)}</T>
@@ -136,7 +172,7 @@ export default function ExcusedScreen() {
           {[
             [`${stats.length}`, 'avg days'],
             [`${stats.cycle}`, 'avg cycle'],
-            [nice(stats.next).split(', ')[1] ?? nice(stats.next), 'next (est.)'],
+            [stats.next ? (nice(stats.next).split(', ')[1] ?? nice(stats.next)) : '—', 'next (est.)'],
           ].map(([a, b]) => (
             <View key={b} style={[glass, { flex: 1, paddingVertical: 14, paddingHorizontal: 14 }]}>
               <T style={{ fontSize: 22, fontWeight: '700' }} numberOfLines={1}>

@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
 
 import { LocationPrompt } from '@/components/location-prompt';
+import { ExcusedCard } from '@/components/excused-card';
 import { OrbitDial } from '@/components/orbit-dial';
 import { PrayerRow } from '@/components/prayer-row';
 import { Icon } from '@/components/ui/icon';
@@ -45,7 +46,6 @@ export default function TodayScreen() {
   const myRow = me ? statusRow(logs.data ?? [], me, todayIso, next?.date === todayIso ? next.key : undefined) : [];
   const excused = useExcused(me, !!profile?.track_excused);
   const paused = !!profile?.paused_since;
-  const pausedDay = profile?.paused_since ? Math.round((Date.parse(todayIso) - Date.parse(profile.paused_since)) / 86_400_000) + 1 : 0;
   const streak = me ? streakFrom(logs.data ?? [], me, todayIso, excusedDates(excused.data, todayIso)) : 0;
 
   // The prayer whose time has most recently started is the one to log from the dial.
@@ -125,16 +125,7 @@ export default function TodayScreen() {
       </Tap>
 
       {paused ? (
-        <Tap
-          onPress={() => router.push('/excused')}
-          style={{ marginHorizontal: 16, marginTop: 10, borderRadius: 28, padding: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12, ...card }}>
-          <Icon n="moon" s={24} />
-          <View style={{ flex: 1 }}>
-            <T style={{ fontSize: 16, fontWeight: '600' }}>Excused · day {pausedDay}</T>
-            <T style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>Your streak is safe and reminders are paused. Tap when you’re ready to end it.</T>
-          </View>
-          <Icon n="chev" s={18} />
-        </Tap>
+        <ExcusedCard today={todayIso} dark={dark} card={card} />
       ) : (
         <View style={{ marginTop: 10 }}>
           <PrayerRow
@@ -145,6 +136,7 @@ export default function TodayScreen() {
           />
         </View>
       )}
+      {!paused && <ExcusedCard today={todayIso} dark={dark} card={card} />}
 
       <View style={{ marginHorizontal: 16, marginTop: 16, borderRadius: 28, paddingTop: 14, paddingHorizontal: 16, paddingBottom: circle && queue.length ? 2 : 16, borderWidth: 1, ...card }}>
         {!circle ? (

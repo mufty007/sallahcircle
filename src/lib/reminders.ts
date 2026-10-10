@@ -9,7 +9,10 @@ const MAX_PENDING = 60;
 /** Local notifications cover a few days; server pushes cover a month. */
 const LOCAL_DAYS = 6;
 const SERVER_DAYS = 30;
-const CHANNEL_SOUND = 'prayer';
+// Android channels can't change sound once created, so these IDs carry the sound name.
+export const CHIME = 'chime.wav';
+const CHANNEL_SOUND = 'prayer-chime';
+export const CHANNEL_NUDGES = 'nudges-chime';
 const CHANNEL_SILENT = 'prayer-silent';
 
 let handlerReady = false;
@@ -21,8 +24,10 @@ export async function prepareNotifications() {
     N.setNotificationHandler({
       handleNotification: async () => ({ shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true }),
     });
-    await N.setNotificationChannelAsync(CHANNEL_SOUND, { name: 'Prayer reminders', importance: N.AndroidImportance.HIGH, sound: 'default' });
-    await N.setNotificationChannelAsync('nudges', { name: 'Nudges from your circles', importance: N.AndroidImportance.HIGH, sound: 'default' });
+    await N.setNotificationChannelAsync(CHANNEL_SOUND, { name: 'Prayer reminders', importance: N.AndroidImportance.HIGH, sound: CHIME });
+    await N.setNotificationChannelAsync(CHANNEL_NUDGES, { name: 'Nudges from your circles', importance: N.AndroidImportance.HIGH, sound: CHIME });
+    // Channels from earlier versions (default sound).
+    await Promise.all(['prayer', 'nudges'].map((id) => N.deleteNotificationChannelAsync(id).catch(() => {})));
     await N.setNotificationChannelAsync(CHANNEL_SILENT, { name: 'Silent prayer reminders', importance: N.AndroidImportance.DEFAULT, sound: null, vibrationPattern: [0] });
   }
   return N;
@@ -176,7 +181,7 @@ export function syncReminders(userId: string, profile: Profile, force = false): 
       for (const n of planned) {
         await N.scheduleNotificationAsync({
           identifier: n.id,
-          content: { title: n.title, body: n.body, data: n.data, sound: n.silent ? false : 'default', interruptionLevel: 'timeSensitive' },
+          content: { title: n.title, body: n.body, data: n.data, sound: n.silent ? false : CHIME, interruptionLevel: 'timeSensitive' },
           trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: n.at, channelId: n.silent ? CHANNEL_SILENT : CHANNEL_SOUND },
         });
       }

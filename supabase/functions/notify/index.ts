@@ -75,9 +75,9 @@ export default {
       to: token,
       title,
       body,
-      sound: quiet ? null : "default",
+      sound: quiet ? null : "chime.wav",
       priority: quiet ? "normal" : "high",
-      channelId: quiet ? "prayer-silent" : "nudges",
+      channelId: quiet ? "prayer-silent" : "nudges-chime",
       data: { type: "nudge", id: n.id },
     }));
     const res = await fetch("https://exp.host/--/api/v2/push/send", {

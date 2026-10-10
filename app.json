@@ -45,7 +45,16 @@
           "locationWhenInUsePermission": "Salah Circle uses your location to calculate accurate prayer times and the Qibla direction."
         }
       ],
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/chime.wav"
+          ],
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#8FE3C0"
+        }
+      ],
       "expo-web-browser",
       [
         "expo-audio",
@@ -74,8 +83,7 @@
             }
           ]
         }
-      ],
-      "@sentry/react-native"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

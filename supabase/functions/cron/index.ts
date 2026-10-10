@@ -52,9 +52,9 @@ export default {
           to: token,
           title: r.title,
           body,
-          sound: r.silent ? null : "default",
+          sound: r.silent ? null : "chime.wav",
           priority: "high",
-          channelId: r.silent ? "prayer-silent" : "prayer",
+          channelId: r.silent ? "prayer-silent" : "prayer-chime",
           data: { ...r.data, kind: r.kind },
         });
       }

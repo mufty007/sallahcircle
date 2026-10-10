@@ -1,9 +1,9 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
+import { stopBackgroundRefresh } from '@/lib/background';
 import { unregisterDevice } from '@/lib/notifications';
 import { clearReminders } from '@/lib/reminders';
-import { identify } from '@/lib/monitoring';
 import { supabase, type Profile } from '@/lib/supabase';
 
 type ProfilePatch = Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at' | 'friend_code'>>;
@@ -36,7 +36,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
     const { data } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      identify(s?.user.id ?? null);
       if (!s) setProfile(null);
     });
     return () => data.subscription.unsubscribe();
@@ -68,7 +67,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    await Promise.all([clearReminders().catch(() => {}), unregisterDevice().catch(() => {})]);
+    await Promise.all([clearReminders().catch(() => {}), unregisterDevice().catch(() => {}), stopBackgroundRefresh().catch(() => {})]);
     await supabase.auth.signOut();
   }, []);
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
+import { markNudgesSeen, startBackgroundRefresh } from './background';
 import { invalidate } from './data';
 import { registerForNotifications } from './notifications';
 import { listenForReminderTaps, syncReminders } from './reminders';
@@ -17,10 +18,13 @@ export function useLiveSync(userId: string | undefined, profile: Profile | null)
   useEffect(() => {
     if (!userId || !profile) return;
     syncReminders(userId, profile).catch((e) => console.warn('Reminder sync failed', e));
+    startBackgroundRefresh().catch(() => {});
+    markNudgesSeen();
     updatePrayerWidget(profile).catch(() => {});
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
         invalidate();
+        markNudgesSeen();
         syncReminders(userId, profile).catch(() => {});
         updatePrayerWidget(profile).catch(() => {});
       }

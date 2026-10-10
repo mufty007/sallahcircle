@@ -71,6 +71,7 @@ export default function SettingsScreen() {
     setOverrides((o) => ({ ...o, [key]: v }));
     try {
       await updateProfile({ [key]: v });
+      if (key === 'track_excused' && v) router.push('/excused');
     } catch (e) {
       setOverrides((o) => ({ ...o, [key]: !v }));
       Alert.alert('Couldn’t save', e instanceof Error ? e.message : '');
