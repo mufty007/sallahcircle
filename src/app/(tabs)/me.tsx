@@ -1,14 +1,12 @@
-import * as Clipboard from 'expo-clipboard';
 import { router, type Href } from 'expo-router';
-import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/ui/icon';
-import { Av, glass, hairline, RoundBtn, Tap } from '@/components/ui/primitives';
+import { Av, glass, hairline, Ring, RoundBtn, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { MEMBERS } from '@/data/mock';
-import { excusedDates, isoDate, loadLogs, streakFrom, useExcused, useNow, useQuery } from '@/lib/data';
+import { excusedDates, isoDate, loadLogs, streakFrom, useExcused, useMyCircles, useNow, useQuery } from '@/lib/data';
 import { METHODS } from '@/lib/prayer-times';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/state/session';
@@ -21,9 +19,8 @@ const EXCUSED = 'rgba(199,175,245,0.35)';
 const heatColor = (n: number) => (n >= 5 ? SC.mint : n >= 3 ? mintA(0.6) : n >= 1 ? SC.amber : 'rgba(255,255,255,0.1)');
 
 export default function MeScreen() {
-  const [copied, setCopied] = useState(false);
   const { profile, session } = useSession();
-  const FRIEND_CODE = profile?.friend_code ?? '';
+  const firstCircle = useMyCircles(session?.user.id).data?.[0];
   const me = { init: (profile?.display_name?.[0] ?? '?').toUpperCase(), color: profile?.avatar_color ?? MEMBERS[0].color, seed: profile?.avatar_seed ?? profile?.id };
   const method = METHODS.find((m) => m.id === profile?.calc_method)?.name ?? 'ISNA';
   const userId = session?.user.id;
@@ -64,6 +61,13 @@ export default function MeScreen() {
     best = Math.max(best, run);
   }
   best = Math.max(best, streak);
+  // Last 7 days, including today.
+  const weekStartIso = new Date(Date.parse(`${today}T12:00:00Z`) - 6 * DAY).toISOString().slice(0, 10);
+  const week = (logs.data ?? []).filter((l) => l.prayed_on >= weekStartIso && l.prayed_on <= today);
+  const weekPrayed = week.filter((l) => l.status !== 'missed').length;
+  const weekOnTime = week.filter((l) => l.status === 'on_time').length;
+  const weekExcused = [...skip].filter((d) => d >= weekStartIso && d <= today).length;
+  const weekPossible = (7 - weekExcused) * 5;
   const onTimePct = logs.data?.length ? Math.round((logs.data.filter((l) => l.status === 'on_time').length / logs.data.length) * 100) : null;
   const fajrCount = all.filter((l) => l.prayer === 'fajr').length;
   const badges: [string, string, boolean][] = [
@@ -77,6 +81,7 @@ export default function MeScreen() {
     ['beads', 'Tasbīḥ', 'Dhikr counter', '/tasbih'],
     ['list', 'Qaḍāʾ', 'Prayers and fasts to make up', '/qada'],
     ['plate', 'Fasting', 'Suḥūr, ifṭār and your fasts', '/fasting'],
+    ['pin', 'Masjids nearby', 'Find a place to pray', '/masjids'],
     ...(profile?.track_excused ? [['moon', 'Excused days', 'Private to you', '/excused'] as [IconName, string, string, Href]] : []),
   ];
 
@@ -102,6 +107,16 @@ export default function MeScreen() {
           </View>
           <T style={{ fontSize: 13, opacity: 0.6 }}>
             {best > streak ? `Best: ${best} days · ${best - streak} to go` : streak ? 'Your best yet' : 'Pray all five today to start one'}
+          </T>
+        </View>
+      </View>
+
+      <View style={[glass, { marginHorizontal: 16, marginTop: 14, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }]} accessible accessibilityLabel={`This week: ${weekPrayed} of ${weekPossible} prayers, ${weekOnTime} on time`}>
+        <Ring pct={weekPossible ? weekPrayed / weekPossible : 0} size={56} label={`${weekPrayed}`} labelSize={17} />
+        <View style={{ flex: 1 }}>
+          <T style={{ fontSize: 15, fontWeight: '600' }}>{`This week · ${weekPrayed} of ${weekPossible}`}</T>
+          <T style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>
+            {weekPrayed === 0 ? 'Log a prayer to start your week.' : `${weekOnTime} on time${weekPrayed >= weekPossible - 3 && weekPossible > 0 ? ' · MāshāʾAllāh!' : ''}`}
           </T>
         </View>
       </View>
@@ -164,15 +179,10 @@ export default function MeScreen() {
 
       <View style={[glass, { marginHorizontal: 16, marginTop: 10, paddingVertical: 2, paddingHorizontal: 16 }]}>
         <Tap
-          onPress={async () => {
-            await Clipboard.setStringAsync(FRIEND_CODE);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          }}
+          onPress={() => (firstCircle ? router.push({ pathname: '/invite', params: { circle: firstCircle.id } }) : router.push('/create-circle'))}
           style={{ flexDirection: 'row', alignItems: 'center', height: 44 }}>
-          <T style={{ flex: 1, opacity: 0.65, fontSize: 14 }}>Friend code</T>
-          <T style={{ fontWeight: '600', color: SC.mint, letterSpacing: 1, fontSize: 14 }}>{copied ? 'Copied' : FRIEND_CODE}</T>
-          <Icon n={copied ? 'check' : 'copy'} s={16} c={SC.mint} style={{ marginLeft: 8 }} />
+          <T style={{ flex: 1, opacity: 0.65, fontSize: 14 }}>{firstCircle ? `Invite friends to ${firstCircle.name}` : 'Start a circle'}</T>
+          <Icon n="share" s={16} c={SC.mint} style={{ marginLeft: 8 }} />
         </Tap>
         {[
           ['Location', [profile?.city, profile?.region].filter(Boolean).join(', ') || 'Not set'],

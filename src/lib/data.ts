@@ -590,3 +590,41 @@ export async function setSunnah(userId: string, prayedOn: string, kind: SunnahKi
   if (error) throw error;
   invalidate();
 }
+
+// ─── Safety: block & report ────────────────────────────────────
+export type ReportReason = Enums<'report_reason'>;
+export const REPORT_REASONS: { value: ReportReason; label: string }[] = [
+  { value: 'harassment', label: 'Harassment or bullying' },
+  { value: 'inappropriate', label: 'Inappropriate content' },
+  { value: 'spam', label: 'Spam' },
+  { value: 'impersonation', label: 'Pretending to be someone' },
+  { value: 'other', label: 'Something else' },
+];
+
+export async function loadBlocked(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.from('blocks').select('blocked').eq('blocker', userId);
+  if (error) throw error;
+  return new Set((data ?? []).map((r) => r.blocked));
+}
+
+export function useBlocked(userId: string | undefined) {
+  return useQuery(userId ? `blocked:${userId}` : null, () => loadBlocked(userId!));
+}
+
+export async function setBlocked(userId: string, block: boolean) {
+  const { error } = block ? await supabase.from('blocks').insert({ blocked: userId }) : await supabase.from('blocks').delete().eq('blocked', userId);
+  if (error && error.code !== '23505') throw error;
+  invalidate();
+}
+
+export async function fileReport(input: { targetUser?: string; targetCircle?: string; nudgeId?: string; reason: ReportReason; details?: string }) {
+  const { error } = await supabase.from('reports').insert({
+    target_user: input.targetUser ?? null,
+    target_circle: input.targetCircle ?? null,
+    nudge_id: input.nudgeId ?? null,
+    reason: input.reason,
+    details: input.details?.trim() || null,
+  });
+  if (error?.code === '23505') return; // already reported
+  if (error) throw error;
+}

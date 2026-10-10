@@ -7,7 +7,7 @@ import { OBHead } from '@/components/onboarding';
 import { Btn, Field, RoundBtn } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
-import { continueWithEmail, signInWithGoogle } from '@/lib/auth';
+import { continueWithEmail, sendPasswordReset, signInWithGoogle } from '@/lib/auth';
 import { SC } from '@/theme/colors';
 
 const AppleLogo = () => (
@@ -109,6 +109,23 @@ export default function SignUpScreen() {
             Continue with email
           </Btn>
           <T style={{ fontSize: 12, opacity: 0.5, textAlign: 'center' }}>New here? We’ll create your account. Already joined? We’ll sign you in.</T>
+          <T
+            accessibilityRole="button"
+            onPress={async () => {
+              if (!emailOk) {
+                setError('Type your email above, then tap “Forgot password?” again.');
+                return;
+              }
+              try {
+                await sendPasswordReset(email.trim());
+                Alert.alert('Check your email', `We sent a link to ${email.trim()}. Open it on this phone to set a new password.`);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Couldn’t send the reset email.');
+              }
+            }}
+            style={{ fontSize: 14, fontWeight: '600', textAlign: 'center', color: SC.mint, marginTop: 6, paddingVertical: 6 }}>
+            Forgot password?
+          </T>
         </View>
         <T style={{ marginTop: 32, marginHorizontal: 32, textAlign: 'center', fontSize: 12, opacity: 0.5, lineHeight: 18 }}>
           By continuing you agree to the Terms and Privacy Policy.

@@ -39,6 +39,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      blocks: {
+        Row: {
+          blocked: string
+          blocker: string
+          created_at: string
+        }
+        Insert: {
+          blocked: string
+          blocker?: string
+          created_at?: string
+        }
+        Update: {
+          blocked?: string
+          blocker?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_fkey"
+            columns: ["blocked"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_blocker_fkey"
+            columns: ["blocker"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       circle_members: {
         Row: {
           circle_id: string
@@ -367,6 +400,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           friend_code: string
+          hijri_offset: number
           id: string
           latitude: number | null
           longitude: number | null
@@ -389,6 +423,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           friend_code?: string
+          hijri_offset?: number
           id: string
           latitude?: number | null
           longitude?: number | null
@@ -411,6 +446,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           friend_code?: string
+          hijri_offset?: number
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -527,6 +563,115 @@ export type Database = {
           },
         ]
       }
+      reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          nudge_id: string | null
+          reason: Database["public"]["Enums"]["report_reason"]
+          reporter: string
+          status: Database["public"]["Enums"]["report_status"]
+          target_circle: string | null
+          target_user: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          nudge_id?: string | null
+          reason: Database["public"]["Enums"]["report_reason"]
+          reporter?: string
+          status?: Database["public"]["Enums"]["report_status"]
+          target_circle?: string | null
+          target_user?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          nudge_id?: string | null
+          reason?: Database["public"]["Enums"]["report_reason"]
+          reporter?: string
+          status?: Database["public"]["Enums"]["report_status"]
+          target_circle?: string | null
+          target_user?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_nudge_id_fkey"
+            columns: ["nudge_id"]
+            isOneToOne: false
+            referencedRelation: "nudges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reporter_fkey"
+            columns: ["reporter"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_target_circle_fkey"
+            columns: ["target_circle"]
+            isOneToOne: false
+            referencedRelation: "circles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_target_user_fkey"
+            columns: ["target_user"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_pushes: {
+        Row: {
+          body: string
+          data: Json
+          key: string
+          kind: string
+          send_at: string
+          sent_at: string | null
+          silent: boolean
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          data?: Json
+          key: string
+          kind: string
+          send_at: string
+          sent_at?: string | null
+          silent?: boolean
+          title: string
+          user_id?: string
+        }
+        Update: {
+          body?: string
+          data?: Json
+          key?: string
+          kind?: string
+          send_at?: string
+          sent_at?: string | null
+          silent?: boolean
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_pushes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sunnah_logs: {
         Row: {
           created_at: string
@@ -571,6 +716,26 @@ export type Database = {
           user_id: string
         }[]
       }
+      claim_due_pushes: {
+        Args: { max_rows?: number }
+        Returns: {
+          body: string
+          data: Json
+          key: string
+          kind: string
+          send_at: string
+          sent_at: string | null
+          silent: boolean
+          title: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "scheduled_pushes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       join_circle: { Args: { invite_code: string }; Returns: string }
       member_streaks: {
         Args: { uids: string[] }
@@ -595,6 +760,15 @@ export type Database = {
       }
       reset_circle_code: { Args: { cid: string }; Returns: string }
       username_available: { Args: { name: string }; Returns: boolean }
+      voice_notes_older_than: { Args: { days: number }; Returns: string[] }
+      week_recap: {
+        Args: { since: string; uid: string }
+        Returns: {
+          jamaah: number
+          on_time: number
+          prayed: number
+        }[]
+      }
     }
     Enums: {
       asr_method: "standard" | "hanafi"
@@ -607,6 +781,13 @@ export type Database = {
       prayer_status: "on_time" | "late" | "missed"
       qada_item: "fajr" | "dhuhr" | "asr" | "maghrib" | "isha" | "fast"
       reminder_sound: "adhan" | "chime" | "silent"
+      report_reason:
+        | "spam"
+        | "harassment"
+        | "inappropriate"
+        | "impersonation"
+        | "other"
+      report_status: "open" | "actioned" | "dismissed"
       sunnah_kind:
         | "fajr_before"
         | "dhuhr_before"
@@ -756,6 +937,14 @@ export const Constants = {
       prayer_status: ["on_time", "late", "missed"],
       qada_item: ["fajr", "dhuhr", "asr", "maghrib", "isha", "fast"],
       reminder_sound: ["adhan", "chime", "silent"],
+      report_reason: [
+        "spam",
+        "harassment",
+        "inappropriate",
+        "impersonation",
+        "other",
+      ],
+      report_status: ["open", "actioned", "dismissed"],
       sunnah_kind: [
         "fajr_before",
         "dhuhr_before",

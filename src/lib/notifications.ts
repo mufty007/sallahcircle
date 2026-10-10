@@ -12,6 +12,9 @@ export const notificationsSupported =
 
 let deviceToken: string | null = null;
 
+/** This device's Expo push token, once registered (null in Expo Go on Android, on web, or if denied). */
+export const currentPushToken = () => deviceToken;
+
 /** Stop pushes to this device for the signed-out user. */
 export async function unregisterDevice() {
   if (deviceToken) await supabase.from('push_tokens').delete().eq('token', deviceToken);
@@ -38,13 +41,15 @@ export async function registerForNotifications(userId: string, ask = true) {
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-    deviceToken = token;
-    await supabase.from('push_tokens').upsert({
+    // If another account left this phone's token behind, RLS refuses the upsert and we fall back to local reminders.
+    const { error } = await supabase.from('push_tokens').upsert({
       token,
       user_id: userId,
       platform: Platform.OS as 'ios' | 'android',
       updated_at: new Date().toISOString(),
     });
+    if (error) throw error;
+    deviceToken = token;
   } catch (e) {
     // Expo Go can't always issue push tokens; local reminders still work.
     console.warn('Push token unavailable', e);

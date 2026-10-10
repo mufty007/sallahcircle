@@ -206,3 +206,22 @@ export function formatIn(ms: number) {
   const m = mins % 60;
   return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? '' : 's'}`;
 }
+
+/**
+ * Apply a moon-sighting offset (±days) to a run of consecutive days: day i takes the Hijri date
+ * AlAdhan gives for day i + offset. The ends of the run reuse the nearest available date.
+ */
+export function shiftHijri<T extends { hijri: Hijri }>(days: T[], offset: number): T[] {
+  if (!offset || !days.length) return days;
+  return days.map((d, i) => ({ ...d, hijri: days[Math.min(days.length - 1, Math.max(0, i + offset))].hijri }));
+}
+
+/** A Gregorian month's Hijri dates with the user's offset applied (borrows from the neighbouring months). */
+export async function fetchHijriMonthAdjusted(year: number, month: number, offset: number): Promise<CalendarDay[]> {
+  if (!offset) return fetchHijriMonth(year, month);
+  const prev = month === 1 ? [year - 1, 12] : [year, month - 1];
+  const next = month === 12 ? [year + 1, 1] : [year, month + 1];
+  const [a, b, c] = await Promise.all([fetchHijriMonth(prev[0], prev[1]), fetchHijriMonth(year, month), fetchHijriMonth(next[0], next[1])]);
+  const run = [...a, ...b, ...c];
+  return b.map((d, i) => ({ ...d, hijri: run[a.length + i + offset]?.hijri ?? d.hijri }));
+}

@@ -47,7 +47,19 @@ export default function PublicCircleScreen() {
           <Stars n={30} h={200} />
         </View>
       }
-      header={<BackBar right={<RoundBtn n="share" />} />}
+      header={
+        <BackBar
+          right={
+            c && (
+              <RoundBtn
+                n="more"
+                accessibilityLabel="Report this circle"
+                onPress={() => router.push({ pathname: '/report', params: { circle: c.id, name: c.name } })}
+              />
+            )
+          }
+        />
+      }
       footer={
         c && (
           <>

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { OBHead, OBTop } from '@/components/onboarding';
@@ -8,6 +8,7 @@ import { Btn, Label, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { invalidate } from '@/lib/data';
+import { takePendingInvite } from '@/lib/invite';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/state/session';
 import { mintA, SC } from '@/theme/colors';
@@ -23,6 +24,12 @@ export default function FindCircleScreen() {
   const { onboarded } = useSession();
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Code from an invite link opened before signing up.
+  useEffect(() => {
+    if (params.code) return;
+    takePendingInvite().then((c) => c && setCode(c));
+  }, [params.code]);
 
   const join = async () => {
     setJoining(true);

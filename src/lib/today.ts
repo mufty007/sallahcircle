@@ -3,7 +3,7 @@ import { useSession } from '@/state/session';
 import type { Period } from '@/theme/colors';
 
 import { decimalHour, isoDate, useNow, useQuery } from './data';
-import { fetchDay, PRAYER_KEYS, PRAYER_LABEL, type DayTimes, type PrayerKey } from './prayer-times';
+import { fetchDay, fetchHijriMonthAdjusted, PRAYER_KEYS, PRAYER_LABEL, type DayTimes, type Hijri, type PrayerKey } from './prayer-times';
 
 const MIN = 60_000;
 
@@ -73,4 +73,13 @@ export function useMyDay(tickMs = 1000) {
         }
       : null,
   };
+}
+
+/** Today's Hijri date with the user's moon-sighting offset applied. */
+export function useHijriToday(todayIso: string, offset: number, fallback?: Hijri) {
+  const y = Number(todayIso.slice(0, 4));
+  const m = Number(todayIso.slice(5, 7));
+  const month = useQuery(offset ? `hijri:${y}-${String(m).padStart(2, '0')}:${offset}` : null, () => fetchHijriMonthAdjusted(y, m, offset));
+  if (!offset) return fallback;
+  return month.data?.[Number(todayIso.slice(8, 10)) - 1]?.hijri ?? fallback;
 }

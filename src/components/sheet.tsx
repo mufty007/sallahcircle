@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { createContext, use, useCallback, useEffect, type ReactNode } from 'react';
-import { BackHandler, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -94,7 +94,8 @@ export function Sheet({ children }: { children: ReactNode }) {
 
   return (
     <SheetCtx value={close}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      {/* Lifts the sheet above the keyboard when a field inside it is focused. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,4,12,0.55)' }, backdropStyle]}>
           <Pressable style={{ flex: 1 }} onPress={close} accessibilityRole="button" accessibilityLabel="Close" />
         </Animated.View>
@@ -110,6 +111,7 @@ export function Sheet({ children }: { children: ReactNode }) {
                   overScrollMode="never"
                   onScroll={onScroll}
                   scrollEventThrottle={16}
+                  keyboardShouldPersistTaps="handled"
                   contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 20 }}>
                   {children}
                 </Animated.ScrollView>
@@ -117,7 +119,7 @@ export function Sheet({ children }: { children: ReactNode }) {
             </InkContext>
           </Animated.View>
         </GestureDetector>
-      </View>
+      </KeyboardAvoidingView>
     </SheetCtx>
   );
 }

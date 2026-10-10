@@ -5,6 +5,7 @@ import { invalidate } from './data';
 import { registerForNotifications } from './notifications';
 import { listenForReminderTaps, syncReminders } from './reminders';
 import { supabase, type Profile } from './supabase';
+import { updatePrayerWidget } from './widget';
 
 /**
  * Keeps a signed-in session fresh while the app is open:
@@ -16,10 +17,12 @@ export function useLiveSync(userId: string | undefined, profile: Profile | null)
   useEffect(() => {
     if (!userId || !profile) return;
     syncReminders(userId, profile).catch((e) => console.warn('Reminder sync failed', e));
+    updatePrayerWidget(profile).catch(() => {});
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') {
         invalidate();
         syncReminders(userId, profile).catch(() => {});
+        updatePrayerWidget(profile).catch(() => {});
       }
     });
     return () => sub.remove();

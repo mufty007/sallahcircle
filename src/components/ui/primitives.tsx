@@ -32,8 +32,13 @@ export const glass: ViewStyle = {
 
 /** Pressable with a gentle press feedback. */
 export function Tap({ style, children, ...rest }: PressableProps & { style?: StyleProp<ViewStyle> }) {
+  const pressable = !!(rest.onPress || rest.onLongPress);
   return (
-    <Pressable {...rest} style={({ pressed }) => [style, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]}>
+    <Pressable
+      accessibilityRole={pressable ? 'button' : undefined}
+      accessibilityState={rest.disabled ? { disabled: true } : undefined}
+      {...rest}
+      style={({ pressed }) => [style, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]}>
       {children}
     </Pressable>
   );
@@ -59,29 +64,31 @@ export function Av({ m, s = 36, ring, style }: { m: AvatarLike; s?: number; ring
   );
 }
 
+const CELL_LABEL: Record<PrayerStatus, string> = { d: 'prayed on time', l: 'prayed late', m: 'missed', n: 'up next', u: 'not logged' };
+
 export function Cell({ k, s = 22, dark = true }: { k: PrayerStatus; s?: number; dark?: boolean }) {
   const base: ViewStyle = { width: s, height: s, borderRadius: s / 2, alignItems: 'center', justifyContent: 'center' };
   if (k === 'd' || k === 'l')
     return (
-      <View style={[base, { backgroundColor: k === 'd' ? SC.mint : SC.amber }]}>
+      <View accessible accessibilityLabel={CELL_LABEL[k]} style={[base, { backgroundColor: k === 'd' ? SC.mint : SC.amber }]}>
         <Icon n="check" s={s * 0.62} c={SC.ink} w={2.6} />
       </View>
     );
   if (k === 'm')
     return (
-      <View style={[base, { borderWidth: 1.5, borderColor: SC.coral }]}>
+      <View accessible accessibilityLabel={CELL_LABEL[k]} style={[base, { borderWidth: 1.5, borderColor: SC.coral }]}>
         <View style={{ width: s * 0.4, height: 2, backgroundColor: SC.coral, borderRadius: 2 }} />
       </View>
     );
   if (k === 'n') {
     const c = dark ? '#fff' : SC.ink;
     return (
-      <View style={[base, { borderWidth: 2, borderColor: c, boxShadow: `0 0 0 4px ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(11,18,32,0.08)'}` }]}>
+      <View accessible accessibilityLabel={CELL_LABEL[k]} style={[base, { borderWidth: 2, borderColor: c, boxShadow: `0 0 0 4px ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(11,18,32,0.08)'}` }]}>
         <View style={{ width: s * 0.3, height: s * 0.3, borderRadius: s, backgroundColor: c }} />
       </View>
     );
   }
-  return <View style={[base, { backgroundColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(11,18,32,0.08)' }]} />;
+  return <View accessible accessibilityLabel={CELL_LABEL[k]} style={[base, { backgroundColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(11,18,32,0.08)' }]} />;
 }
 
 export function Chip({
@@ -91,6 +98,7 @@ export function Chip({
   style,
   onPress,
   textStyle,
+  selected,
 }: {
   children: ReactNode;
   bg?: string;
@@ -98,6 +106,8 @@ export function Chip({
   style?: StyleProp<ViewStyle>;
   textStyle?: object;
   onPress?: () => void;
+  /** Screen-reader state for chips used as choices. */
+  selected?: boolean;
 }) {
   const ink = useInk();
   const color = c ?? ink;
@@ -111,18 +121,20 @@ export function Chip({
     </InkContext>
   );
   return (
-    <Tap disabled={!onPress} onPress={onPress} style={[styles.chip, { backgroundColor: bg }, style]}>
+    <Tap disabled={!onPress} onPress={onPress} accessibilityState={selected != null ? { selected } : undefined} hitSlop={6} style={[styles.chip, { backgroundColor: bg }, style]}>
       {body}
     </Tap>
   );
 }
 
-export function Toggle({ on, onChange, light }: { on: boolean; onChange?: (v: boolean) => void; light?: boolean }) {
+export function Toggle({ on, onChange, light, label }: { on: boolean; onChange?: (v: boolean) => void; light?: boolean; label?: string }) {
   const bg = on ? (light ? SC.green : SC.mint) : light ? 'rgba(11,18,32,0.12)' : 'rgba(255,255,255,0.16)';
   return (
     <Pressable
       accessibilityRole="switch"
       accessibilityState={{ checked: on }}
+      accessibilityLabel={label}
+      hitSlop={8}
       onPress={() => onChange?.(!on)}
       style={{ width: 50, height: 30, borderRadius: 15, backgroundColor: bg, padding: 3, alignItems: on ? 'flex-end' : 'flex-start' }}>
       <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
@@ -181,9 +193,39 @@ export function Btn({
   );
 }
 
-export function RoundBtn({ n, onPress, bg = 'rgba(255,255,255,0.1)', dot, s = 40 }: { n: IconName; onPress?: () => void; bg?: string; dot?: boolean; s?: number }) {
+const ICON_LABEL: Partial<Record<IconName, string>> = {
+  back: 'Back',
+  gear: 'Settings',
+  bell: 'Activity',
+  plus: 'Add',
+  share: 'Share',
+  more: 'More options',
+  together: 'Pray together',
+  copy: 'Copy',
+  chev: 'Next',
+};
+
+export function RoundBtn({
+  n,
+  onPress,
+  bg = 'rgba(255,255,255,0.1)',
+  dot,
+  s = 40,
+  accessibilityLabel,
+}: {
+  n: IconName;
+  onPress?: () => void;
+  bg?: string;
+  dot?: boolean;
+  s?: number;
+  accessibilityLabel?: string;
+}) {
   return (
-    <Tap onPress={onPress} style={{ width: s, height: s, borderRadius: s / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+    <Tap
+      onPress={onPress}
+      accessibilityLabel={(accessibilityLabel ?? ICON_LABEL[n] ?? n) + (dot ? ', new' : '')}
+      hitSlop={s < 44 ? (44 - s) / 2 : undefined}
+      style={{ width: s, height: s, borderRadius: s / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
       <Icon n={n} s={20} />
       {dot && <View style={{ position: 'absolute', top: 9, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: SC.coral }} />}
     </Tap>
@@ -208,6 +250,8 @@ export function Segmented<V extends string>({
         return (
           <Pressable
             key={o.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
             onPress={() => onChange(o.value)}
             style={{ flex: 1, borderRadius: (height - 8) / 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: on ? '#fff' : 'transparent' }}>
             <T style={{ color: on ? SC.ink : '#fff', fontSize: height < 48 ? 14 : 15, fontWeight: '600' }}>{o.label}</T>

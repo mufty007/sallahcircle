@@ -4,11 +4,12 @@ import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
 import { StoredVoice } from '@/components/voice';
-import { Av, Cell, Chip, glass, hairline, Kicker, RoundBtn } from '@/components/ui/primitives';
+import { safetyMenu } from '@/components/safety';
+import { Av, Cell, Chip, glass, hairline, Kicker, RoundBtn, Tap } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import type { PrayerStatus } from '@/data/mock';
-import { isoDate, loadLogs, respondToNudge, STATUS_CELL, useInbox, useMyCircles, useNow, useQuery, type InboxItem } from '@/lib/data';
+import { isoDate, loadLogs, respondToNudge, STATUS_CELL, useBlocked, useInbox, useMyCircles, useNow, useQuery, type InboxItem } from '@/lib/data';
 import { PRAYER_LABEL } from '@/lib/prayer-times';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
@@ -19,7 +20,7 @@ const FILTERS: Filter[] = ['All', 'Nudges', 'Prayed', 'Jamāʿah'];
 type Row = {
   key: string;
   at: Date;
-  who: { id: string; name: string; init: string; color: string };
+  who: { id: string; name: string; init: string; color: string; seed?: string };
   filter: Exclude<Filter, 'All'>;
   text: ReactNode;
   nudge?: InboxItem;
@@ -52,6 +53,7 @@ export default function ActivityScreen() {
   const [sending, setSending] = useState<string | null>(null);
 
   const inbox = useInbox(me);
+  const blocked = useBlocked(me);
   const circles = useMyCircles(me);
   const mates = new Map((circles.data ?? []).flatMap((c) => c.members.filter((m) => !m.you)).map((m) => [m.id, m]));
   const since = isoDate(new Date(now.getTime() - 86_400_000));
@@ -99,7 +101,7 @@ export default function ActivityScreen() {
         };
       }),
   ]
-    .filter((r) => filter === 'All' || r.filter === filter)
+    .filter((r) => (filter === 'All' || r.filter === filter) && !blocked.data?.has(r.who.id))
     .sort((a, b) => b.at.getTime() - a.at.getTime());
 
   const groups: [string, Row[]][] = [
@@ -149,7 +151,12 @@ export default function ActivityScreen() {
                   const n = r.nudge;
                   const options = n ? REPLIES[n.kind] : undefined;
                   return (
-                    <View key={r.key} style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: hairline(), alignItems: 'flex-start' }}>
+                    <Tap
+                      key={r.key}
+                      onLongPress={() => r.who.id && safetyMenu(r.who.id, r.who.name, !!blocked.data?.has(r.who.id), n?.id)}
+                      delayLongPress={350}
+                      accessibilityHint="Long-press to report or block"
+                      style={{ flexDirection: 'row', gap: 12, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderTopColor: hairline(), alignItems: 'flex-start' }}>
                       <Av m={r.who} s={36} />
                       <View style={{ flex: 1 }}>
                         <T style={{ fontSize: 14, lineHeight: 19 }}>{r.text}</T>
@@ -183,7 +190,7 @@ export default function ActivityScreen() {
                       </View>
                       {r.cell && <Cell k={r.cell} s={22} />}
                       {r.icon === 'heart' && <Icon n="heart" s={20} c={SC.coral} />}
-                    </View>
+                    </Tap>
                   );
                 })}
               </View>

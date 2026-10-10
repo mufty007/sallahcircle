@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 
-import { notificationsSupported } from './notifications';
-import { fetchDay, formatTime, PRAYER_KEYS, PRAYER_LABEL, type PrayerKey } from './prayer-times';
+import { currentPushToken, notificationsSupported, registerForNotifications } from './notifications';
+import { fetchMonth, formatTime, PRAYER_KEYS, PRAYER_LABEL, shiftHijri, type DayTimes, type PrayerKey } from './prayer-times';
 import { supabase, type Profile } from './supabase';
 
 /** iOS keeps at most 64 pending local notifications; leave headroom. */
 const MAX_PENDING = 60;
-const DAYS_AHEAD = 6;
+/** Local notifications cover a few days; server pushes cover a month. */
+const LOCAL_DAYS = 6;
+const SERVER_DAYS = 30;
 const CHANNEL_SOUND = 'prayer';
 const CHANNEL_SILENT = 'prayer-silent';
 
@@ -26,12 +28,13 @@ export async function prepareNotifications() {
   return N;
 }
 
-type Planned = { id: string; at: Date; title: string; body: string; silent: boolean; data: { prayer?: PrayerKey; date: string; kind: 'at' | 'before' | 'jumuah' | 'fast' } };
+type Kind = 'at' | 'before' | 'jumuah' | 'fast' | 'recap';
+type Planned = { id: string; at: Date; title: string; body: string; silent: boolean; data: { prayer?: PrayerKey; date: string; kind: Kind } };
 
 /** DD-MM-YYYY → YYYY-MM-DD */
 const iso = (dmy: string) => dmy.split('-').reverse().join('-');
 
-async function plan(userId: string, profile: Profile): Promise<Planned[]> {
+async function plan(userId: string, profile: Profile, daysAhead: number, cap: number): Promise<Planned[]> {
   if (profile.latitude == null || profile.longitude == null) return [];
   // Excused days: no prayer or fasting reminders until they end.
   if (profile.paused_since) return [];
@@ -49,21 +52,29 @@ async function plan(userId: string, profile: Profile): Promise<Planned[]> {
   const jumuah = s.data?.jumuah_reminder ?? true;
 
   const start = Date.now();
-  const days = await Promise.all(
-    Array.from({ length: DAYS_AHEAD }, (_, i) => fetchDay(place, profile.calc_method, profile.asr_method, new Date(start + i * 86_400_000)).catch(() => null)),
-  );
+  // This month and next (two requests), trimmed to the window starting today.
+  const now = new Date(start);
+  const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const months = await Promise.all([
+    fetchMonth(place, profile.calc_method, profile.asr_method, now.getUTCFullYear(), now.getUTCMonth() + 1).catch(() => [] as DayTimes[]),
+    fetchMonth(place, profile.calc_method, profile.asr_method, nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1).catch(() => [] as DayTimes[]),
+  ]);
+  const all = shiftHijri(months.flat(), profile.hijri_offset ?? 0);
+  const firstIdx = all.findIndex((d) => d.times.isha.getTime() > start);
+  const days = firstIdx < 0 ? [] : all.slice(firstIdx, firstIdx + daysAhead);
 
   const out: Planned[] = [];
   const extras: Planned[] = [];
   const time = (d: Date) => formatTime(d, profile.timezone, true);
   for (const day of days) {
-    if (!day) continue;
     const date = iso(day.date);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
     const ramadan = day.hijri.month.number === 9;
-    const extra = (key: string, at: Date, title: string, body: string, kind: 'jumuah' | 'fast') =>
+    const extra = (key: string, at: Date, title: string, body: string, kind: 'jumuah' | 'fast' | 'recap') =>
       extras.push({ id: `${date}-${key}`, at, title, body, silent: false, data: { date, kind } });
 
+    // Sunday evening: weekly recap (the server fills in the numbers when it sends).
+    if (weekday === 0) extra('recap', new Date(day.times.isha.getTime() + 45 * 60_000), 'Your week in prayer', 'Tap to see how your week went.', 'recap');
     if (jumuah && weekday === 5) {
       extra('jumuah-morning', new Date(day.sunrise.getTime() + 2 * 3_600_000), 'Jumuʿah Mubārak', 'A good day to read Sūrat al-Kahf and send ṣalawāt.', 'jumuah');
       extra('jumuah-soon', new Date(day.times.dhuhr.getTime() - 3_600_000), 'Jumuʿah in 1 hour', `Head out early. Dhuhr is at ${time(day.times.dhuhr)}.`, 'jumuah');
@@ -109,48 +120,86 @@ async function plan(userId: string, profile: Profile): Promise<Planned[]> {
   }
   // Extras are few, so they're always kept; prayer reminders fill the remaining slots.
   const upcoming = (list: Planned[]) => list.filter((n) => n.at.getTime() > start + 5_000).sort((a, b) => a.at.getTime() - b.at.getTime());
-  const kept = upcoming(extras).slice(0, 12);
-  return [...kept, ...upcoming(out).slice(0, MAX_PENDING - kept.length)].sort((a, b) => a.at.getTime() - b.at.getTime());
+  const kept = upcoming(extras).slice(0, Math.min(12, cap));
+  return [...kept, ...upcoming(out).slice(0, cap - kept.length)].sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
 let queue: Promise<unknown> = Promise.resolve();
 let lastSignature = '';
 
+export type ReminderStatus = { mode: 'server' | 'local'; count: number } | null;
+
+/** Upload reminders for the server to push (replaces this person's unsent ones). */
+async function uploadSchedule(userId: string, planned: Planned[]) {
+  const { error: delErr } = await supabase.from('scheduled_pushes').delete().eq('user_id', userId).is('sent_at', null);
+  if (delErr) throw delErr;
+  const rows = planned.map((n) => ({
+    user_id: userId,
+    key: n.id,
+    send_at: n.at.toISOString(),
+    kind: n.data.kind,
+    title: n.title,
+    body: n.body,
+    data: n.data,
+    silent: n.silent,
+  }));
+  for (let i = 0; i < rows.length; i += 200) {
+    // Rows already sent keep their key, so re-uploading never sends twice.
+    const { error } = await supabase.from('scheduled_pushes').upsert(rows.slice(i, i + 200), { onConflict: 'user_id,key', ignoreDuplicates: true });
+    if (error) throw error;
+  }
+}
+
 /**
- * Replace the device's scheduled prayer reminders with the next few days, based on the
- * user's saved preferences. Safe to call often: runs serially and skips if nothing changed.
- * Returns how many notifications are scheduled (or null where unsupported / not permitted).
+ * Keep reminders in step with the user's preferences. Safe to call often: runs serially and
+ * skips if nothing changed.
+ * - With a push token, the server sends the next 30 days, even if the app isn't opened.
+ * - Without one, the phone schedules the next few days itself.
  */
-export function syncReminders(userId: string, profile: Profile, force = false): Promise<number | null> {
-  const run = async () => {
+export function syncReminders(userId: string, profile: Profile, force = false): Promise<ReminderStatus> {
+  const run = async (): Promise<ReminderStatus> => {
     if (!notificationsSupported) return null;
     const N = await prepareNotifications();
     const { status } = await N.getPermissionsAsync();
     if (status !== 'granted') return null;
 
-    const planned = await plan(userId, profile);
-    const signature = JSON.stringify(planned.map((n) => [n.id, n.at.getTime(), n.silent]));
-    if (!force && signature === lastSignature) return planned.length;
+    if (!currentPushToken()) await registerForNotifications(userId, false).catch(() => false);
+    const server = !!currentPushToken();
+    const planned = await plan(userId, profile, server ? SERVER_DAYS : LOCAL_DAYS, server ? 400 : MAX_PENDING);
+    const signature = JSON.stringify([server, planned.map((n) => [n.id, n.at.getTime(), n.silent, n.title])]);
+    if (!force && signature === lastSignature) return { mode: server ? 'server' : 'local', count: planned.length };
 
     await N.cancelAllScheduledNotificationsAsync();
-    for (const n of planned) {
-      await N.scheduleNotificationAsync({
-        identifier: n.id,
-        content: { title: n.title, body: n.body, data: n.data, sound: n.silent ? false : 'default', interruptionLevel: 'timeSensitive' },
-        trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: n.at, channelId: n.silent ? CHANNEL_SILENT : CHANNEL_SOUND },
-      });
+    if (server) {
+      await uploadSchedule(userId, planned);
+    } else {
+      for (const n of planned) {
+        await N.scheduleNotificationAsync({
+          identifier: n.id,
+          content: { title: n.title, body: n.body, data: n.data, sound: n.silent ? false : 'default', interruptionLevel: 'timeSensitive' },
+          trigger: { type: N.SchedulableTriggerInputTypes.DATE, date: n.at, channelId: n.silent ? CHANNEL_SILENT : CHANNEL_SOUND },
+        });
+      }
     }
     lastSignature = signature;
-    return planned.length;
+    return { mode: server ? 'server' : 'local', count: planned.length };
   };
   const next = queue.then(run, run);
   queue = next.catch(() => {});
   return next;
 }
 
-/** Remove every scheduled reminder (e.g. on sign out). */
+/** Remove every scheduled reminder, on the phone and on the server (e.g. on sign out). */
 export async function clearReminders() {
   lastSignature = '';
+  await supabase
+    .from('scheduled_pushes')
+    .delete()
+    .is('sent_at', null)
+    .then(
+      () => {},
+      () => {},
+    );
   if (!notificationsSupported) return;
   const N = await prepareNotifications();
   await N.cancelAllScheduledNotificationsAsync();
@@ -169,6 +218,7 @@ export async function listenForReminderTaps() {
     const data = req.content.data as (Partial<Planned['data']> & { type?: string }) | undefined;
     if (data?.type === 'nudge') router.push('/activity');
     else if (data?.kind === 'fast') router.push('/fasting');
+    else if (data?.kind === 'recap') router.push('/me');
     else if (data?.kind === 'at' && data.prayer && data.date) {
       router.push({ pathname: '/log-prayer', params: { prayer: data.prayer, date: data.date } });
     }

@@ -6,6 +6,7 @@ import { Platform, useWindowDimensions, View } from 'react-native';
 import { Circle, Rect, Text as SvgText } from 'react-native-svg';
 
 import { bearing, compassWord, distanceKm, Globe } from '@/components/globe';
+import { LocationPrompt } from '@/components/location-prompt';
 import { Btn, glass } from '@/components/ui/primitives';
 import { PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
@@ -74,6 +75,7 @@ function QiblaView({ lng, lat, city, heading, size }: { lng: number; lat: number
   return (
     <Screen bg="navy" withTabBar>
       <PageTitle k={city ? `FROM ${city.toUpperCase()}` : 'FROM YOUR LOCATION'} t="Qibla" style={{ marginTop: 8 }} />
+      <LocationPrompt dark />
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 24, marginTop: 14 }}>
         <T style={{ fontSize: 96, fontWeight: '700', letterSpacing: -5, lineHeight: 92 }}>{brg}°</T>
         <T style={{ paddingBottom: 10, fontSize: 15, opacity: 0.7, lineHeight: 20 }}>

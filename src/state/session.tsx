@@ -3,6 +3,7 @@ import { createContext, use, useCallback, useEffect, useState, type ReactNode } 
 
 import { unregisterDevice } from '@/lib/notifications';
 import { clearReminders } from '@/lib/reminders';
+import { identify } from '@/lib/monitoring';
 import { supabase, type Profile } from '@/lib/supabase';
 
 type ProfilePatch = Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at' | 'friend_code'>>;
@@ -35,6 +36,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
     const { data } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      identify(s?.user.id ?? null);
       if (!s) setProfile(null);
     });
     return () => data.subscription.unsubscribe();

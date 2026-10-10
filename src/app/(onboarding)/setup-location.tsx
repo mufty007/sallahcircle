@@ -8,37 +8,10 @@ import { Icon } from '@/components/ui/icon';
 import { Btn, glass, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
+import { describePlace, deviceTimezone, type Place } from '@/lib/place';
 import { suggestMethod } from '@/lib/prayer-times';
 import { useSession } from '@/state/session';
 import { FONT, mintA, SC } from '@/theme/colors';
-
-type Place = {
-  latitude: number;
-  longitude: number;
-  city: string | null;
-  region: string | null;
-  country_code: string | null;
-};
-
-// ~1 km precision: accurate prayer times without sharing an exact address.
-const round = (n: number) => Math.round(n * 100) / 100;
-const deviceTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-async function describe(latitude: number, longitude: number): Promise<Place> {
-  let geo: Location.LocationGeocodedAddress | undefined;
-  try {
-    [geo] = await Location.reverseGeocodeAsync({ latitude, longitude });
-  } catch {
-    // Reverse geocoding isn't available everywhere (e.g. web); coordinates are enough.
-  }
-  return {
-    latitude: round(latitude),
-    longitude: round(longitude),
-    city: geo?.city ?? geo?.subregion ?? geo?.district ?? null,
-    region: geo?.region ?? null,
-    country_code: geo?.isoCountryCode?.toUpperCase() ?? null,
-  };
-}
 
 const fmtCoord = (lat: number, lng: number) => `${Math.abs(lat).toFixed(2)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lng).toFixed(2)}° ${lng >= 0 ? 'E' : 'W'}`;
 
@@ -50,7 +23,14 @@ export default function SetupLocationScreen() {
 
   const saved: Place | null =
     profile?.latitude != null && profile.longitude != null
-      ? { latitude: profile.latitude, longitude: profile.longitude, city: profile.city, region: profile.region, country_code: profile.country_code }
+      ? {
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          city: profile.city,
+          region: profile.region,
+          country_code: profile.country_code,
+          timezone: profile.timezone,
+        }
       : null;
   const [place, setPlace] = useState<Place | null>(saved);
   const [busy, setBusy] = useState<null | 'locate' | 'search' | 'save'>(null);
@@ -71,7 +51,7 @@ export default function SetupLocationScreen() {
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setPlace(await describe(pos.coords.latitude, pos.coords.longitude));
+      setPlace(await describePlace(pos.coords.latitude, pos.coords.longitude));
     } catch {
       setError('Couldn’t get your location. Try searching for your city.');
       setSearching(true);
@@ -90,7 +70,7 @@ export default function SetupLocationScreen() {
         setError(`No match for “${query.trim()}”.`);
         return;
       }
-      const p = await describe(hit.latitude, hit.longitude);
+      const p = await describePlace(hit.latitude, hit.longitude);
       setPlace({ ...p, city: p.city ?? query.trim() });
       setSearching(false);
     } catch {
@@ -106,8 +86,12 @@ export default function SetupLocationScreen() {
     setError(null);
     try {
       await updateProfile({
-        ...place,
-        timezone: deviceTimezone(),
+        latitude: place.latitude,
+        longitude: place.longitude,
+        city: place.city,
+        region: place.region,
+        country_code: place.country_code,
+        timezone: place.timezone ?? deviceTimezone(),
         // Only pre-pick a method on first setup; never override the user's choice.
         ...(!profile?.onboarded_at && { calc_method: suggestMethod(place.country_code) }),
       });
@@ -189,7 +173,7 @@ export default function SetupLocationScreen() {
             <View style={{ flex: 1 }}>
               <T style={{ fontSize: 16, fontWeight: '600' }}>{[place.city, place.region].filter(Boolean).join(', ') || 'Your location'}</T>
               <T style={{ fontSize: 13, opacity: 0.6 }}>
-                {fmtCoord(place.latitude, place.longitude)} · {deviceTimezone()}
+                {fmtCoord(place.latitude, place.longitude)} · {place.timezone ?? deviceTimezone()}
               </T>
             </View>
             <T onPress={locate} style={{ fontSize: 14, color: SC.mint, fontWeight: '600' }}>

@@ -9,6 +9,7 @@ import { T } from '@/components/ui/text';
 import { invalidate, useQuery } from '@/lib/data';
 import { deleteAccount } from '@/lib/auth';
 import { AVATAR_CREDIT } from '@/lib/avatar';
+import { exportMyData } from '@/lib/export';
 import { notificationsSupported, unregisterDevice } from '@/lib/notifications';
 import { clearReminders, syncReminders } from '@/lib/reminders';
 import { METHODS, PRAYER_KEYS, PRAYER_LABEL } from '@/lib/prayer-times';
@@ -16,7 +17,9 @@ import { supabase } from '@/lib/supabase';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
-type Row = { label: string; value?: string; href?: Href; toggle?: { on: boolean; onChange: (v: boolean) => void } };
+type Row = { label: string; value?: string; href?: Href; onPress?: () => void; toggle?: { on: boolean; onChange: (v: boolean) => void } };
+
+const hijriLabel = (n: number) => (n === 0 ? 'As calculated' : `${n > 0 ? '+' : '−'}${Math.abs(n)} day`);
 
 const time12 = (t?: string | null) => {
   if (!t) return '';
@@ -29,6 +32,7 @@ export default function SettingsScreen() {
   const me = session?.user.id;
   const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const prefs = useQuery(me ? `prefs:${me}` : null, async () => {
     const [r, s] = await Promise.all([
@@ -89,6 +93,15 @@ export default function SettingsScreen() {
         { label: 'Calculation', value: method, href: '/setup-method' },
         { label: 'Asr', value: profile?.asr_method === 'hanafi' ? 'Ḥanafī' : 'Standard', href: '/setup-method' },
         { label: 'Source', value: 'AlAdhan' },
+        {
+          label: 'Hijri date',
+          value: hijriLabel(profile?.hijri_offset ?? 0),
+          onPress: () =>
+            Alert.alert('Hijri date', 'Match your local moon sighting by moving the Hijri date a day either way.', [
+              ...[-1, 0, 1].map((n) => ({ text: hijriLabel(n), onPress: () => updateProfile({ hijri_offset: n }).catch(() => {}) })),
+              { text: 'Cancel', style: 'cancel' as const },
+            ]),
+        },
       ],
     ],
     [
@@ -105,12 +118,14 @@ export default function SettingsScreen() {
               ? '…'
               : prefs.data.scheduled == null
                 ? 'Notifications off'
-                : `${prefs.data.scheduled} reminders scheduled`,
+                : prefs.data.scheduled.mode === 'server'
+                  ? `Push on · ${prefs.data.scheduled.count} queued`
+                  : `${prefs.data.scheduled.count} on this phone`,
         },
         { label: 'Nudges from circles', toggle: { on: flag('nudges', settings?.allow_nudges, true), onChange: setAllowNudges } },
         { label: 'Jumuʿah reminder', toggle: { on: flag('jumuah', settings?.jumuah_reminder, true), onChange: setJumuah } },
         { label: 'Fasting reminders', toggle: { on: flag('fasting', settings?.fasting_reminders, false), onChange: setFasting } },
-        { label: 'Quiet hours', value: settings?.quiet_start ? `${time12(settings.quiet_start)} – ${time12(settings.quiet_end)}` : 'Off' },
+        { label: 'Quiet hours', value: settings?.quiet_start ? `${time12(settings.quiet_start)} – ${time12(settings.quiet_end)}` : 'Off', href: '/setup-reminders' },
       ],
     ],
     [
@@ -126,6 +141,22 @@ export default function SettingsScreen() {
       [
         { label: 'Who sees my log', value: 'My circles' },
         { label: 'Jamāʿah & masjid details', value: 'Only me' },
+        { label: 'Blocked people', href: '/blocked' },
+        {
+          label: 'Download my data',
+          value: exporting ? 'Preparing…' : 'JSON file',
+          onPress: async () => {
+            if (exporting) return;
+            setExporting(true);
+            try {
+              await exportMyData(me!);
+            } catch (e) {
+              Alert.alert('Couldn’t export', e instanceof Error ? e.message : '');
+            } finally {
+              setExporting(false);
+            }
+          },
+        },
       ],
     ],
   ];
@@ -141,8 +172,8 @@ export default function SettingsScreen() {
               {rows.map((r, i) => (
                 <Tap
                   key={r.label}
-                  disabled={!!r.toggle || !r.href}
-                  onPress={() => r.href && router.push(r.href)}
+                  disabled={!!r.toggle || (!r.href && !r.onPress)}
+                  onPress={() => (r.onPress ? r.onPress() : r.href && router.push(r.href))}
                   style={{ flexDirection: 'row', alignItems: 'center', minHeight: 46, gap: 8, borderTopWidth: i ? 1 : 0, borderTopColor: hairline() }}>
                   <T style={{ flex: 1, fontSize: 15 }} numberOfLines={1}>
                     {r.label}
@@ -154,7 +185,7 @@ export default function SettingsScreen() {
                       <T style={{ opacity: 0.55, fontSize: 15, flexShrink: 1 }} numberOfLines={1}>
                         {r.value}
                       </T>
-                      {r.href && <Icon n="chev" s={16} c="rgba(255,255,255,0.35)" />}
+                      {(r.href || r.onPress) && <Icon n="chev" s={16} c="rgba(255,255,255,0.35)" />}
                     </>
                   )}
                 </Tap>

@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/icon';
 import { Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { InkContext, T } from '@/components/ui/text';
+import { inviteLink } from '@/lib/invite';
 import { useAsync } from '@/lib/prayer-times';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/state/session';
@@ -26,9 +27,9 @@ export default function InviteScreen() {
 
   const code = circle.data?.code;
   const name = circle.data?.name ?? 'Your circle';
-  // Deep link into the app's join screen; works once the app is installed.
-  const link = code ? `sallahcircle://find-circle?code=${code}` : '';
-  const message = code ? `Join my prayer circle “${name}” on Salah Circle. Invite code: ${code}\n${link}` : '';
+  // Opens the app's join screen (works once the app is installed).
+  const link = code ? inviteLink(code) : '';
+  const message = code ? `Join my prayer circle “${name}” on Salah Circle.\nTap to join: ${link}\nOr enter code ${code} in the app.` : '';
 
   const done = () => (onboarded ? router.back() : router.push({ pathname: '/all-set', params: { circle: circleId } }));
 
@@ -79,7 +80,7 @@ export default function InviteScreen() {
         </InkContext>
       </View>
       <T style={{ marginTop: 20, marginHorizontal: 32, textAlign: 'center', fontSize: 13, opacity: 0.55, lineHeight: 19 }}>
-        Friends enter this code on the “Find your circle” step, or from Circles → Join with code.
+        Friends tap the link to join, or enter the code on “Find your circle” or in Circles.
       </T>
     </Screen>
   );

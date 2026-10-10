@@ -16,5 +16,7 @@ export function T({ style, ...rest }: TextProps) {
   const flat: TextStyle = StyleSheet.flatten(style) ?? {};
   const { fontWeight, ...without } = flat;
   const w = (fontWeight ? Number(fontWeight) : 400) as keyof typeof FONT;
-  return <Text {...rest} style={[{ color: ink }, without, { fontFamily: FONT[w] ?? FONT[400] }]} />;
+  // Respect the system text size, but cap display text so big numbers don't break layouts.
+  const cap = (without.fontSize ?? 15) >= 28 ? 1.15 : 1.5;
+  return <Text maxFontSizeMultiplier={cap} {...rest} style={[{ color: ink }, without, { fontFamily: FONT[w] ?? FONT[400] }]} />;
 }

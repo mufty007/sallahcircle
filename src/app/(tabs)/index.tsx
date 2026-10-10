@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
 
+import { LocationPrompt } from '@/components/location-prompt';
 import { OrbitDial } from '@/components/orbit-dial';
 import { PrayerRow } from '@/components/prayer-row';
 import { Icon } from '@/components/ui/icon';
@@ -92,6 +93,8 @@ export default function TodayScreen() {
           <RoundBtn n="bell" bg={btn} dot={unread} onPress={() => router.push('/activity')} />
         </View>
       </View>
+
+      <LocationPrompt dark={dark} />
 
       {/* Tap the dial to log the current prayer; long-press to preview other skies. */}
       <Tap

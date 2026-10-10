@@ -75,3 +75,15 @@ export async function deleteAccount() {
   if (!data?.deleted) throw new Error('Couldn’t delete your account. Please try again.');
   await supabase.auth.signOut({ scope: 'local' });
 }
+
+/** Email a password-reset link that opens the app's reset screen. */
+export async function sendPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: Linking.createURL('reset-password') });
+  if (error) throw error;
+}
+
+/** Set a new password for the session created from the reset link. */
+export async function setNewPassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}

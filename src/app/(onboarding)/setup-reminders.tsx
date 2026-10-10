@@ -3,7 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { OBHead, OBTop, useSetupNext } from '@/components/onboarding';
 import { Icon } from '@/components/ui/icon';
-import { Btn, Chip, glass, hairline, Label, Toggle } from '@/components/ui/primitives';
+import { Btn, Chip, glass, hairline, Label, Tap, Toggle } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { formatTime, PRAYER_KEYS, PRAYER_LABEL, useDayTimes, type PrayerKey } from '@/lib/prayer-times';
@@ -35,6 +35,8 @@ export default function SetupRemindersScreen() {
   const [reminders, setReminders] = useState(DEFAULTS);
   const [headsUp, setHeadsUp] = useState<number>(10);
   const [allowNudges, setAllowNudges] = useState(true);
+  // Quiet hours (minutes since midnight); nudges arrive silently in this window.
+  const [quiet, setQuiet] = useState<{ on: boolean; start: number; end: number }>({ on: true, start: 23 * 60, end: 3 * 60 + 30 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export default function SetupRemindersScreen() {
     if (!userId) return;
     Promise.all([
       supabase.from('prayer_reminders').select('prayer, enabled, sound').eq('user_id', userId),
-      supabase.from('reminder_settings').select('heads_up_minutes, allow_nudges').eq('user_id', userId).maybeSingle(),
+      supabase.from('reminder_settings').select('heads_up_minutes, allow_nudges, quiet_start, quiet_end').eq('user_id', userId).maybeSingle(),
     ]).then(([r, s]) => {
       if (r.data?.length) {
         setReminders((prev) => {
@@ -55,6 +57,8 @@ export default function SetupRemindersScreen() {
       if (s.data) {
         setHeadsUp(s.data.heads_up_minutes);
         setAllowNudges(s.data.allow_nudges);
+        if (s.data.quiet_start && s.data.quiet_end) setQuiet({ on: true, start: toMin(s.data.quiet_start), end: toMin(s.data.quiet_end) });
+        else setQuiet((q) => ({ ...q, on: false }));
       }
       setLoading(false);
     });
@@ -76,7 +80,13 @@ export default function SetupRemindersScreen() {
     try {
       const [r, s] = await Promise.all([
         supabase.from('prayer_reminders').upsert(PRAYER_KEYS.map((p) => ({ user_id: userId, prayer: p, ...reminders[p] }))),
-        supabase.from('reminder_settings').upsert({ user_id: userId, heads_up_minutes: headsUp, allow_nudges: allowNudges }),
+        supabase.from('reminder_settings').upsert({
+          user_id: userId,
+          heads_up_minutes: headsUp,
+          allow_nudges: allowNudges,
+          quiet_start: quiet.on ? toTime(quiet.start) : null,
+          quiet_end: quiet.on ? toTime(quiet.end) : null,
+        }),
       ]);
       if (r.error || s.error) throw r.error ?? s.error;
       invalidate();
@@ -153,9 +163,56 @@ export default function SetupRemindersScreen() {
         </View>
         <Toggle on={allowNudges} onChange={setAllowNudges} />
       </View>
+      <View style={[glass, { marginHorizontal: 16, marginTop: 12, paddingHorizontal: 16, paddingVertical: 12 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Icon n="moon" s={22} c={SC.mint} />
+          <View style={{ flex: 1 }}>
+            <T style={{ fontSize: 16, fontWeight: '600' }}>Quiet hours</T>
+            <T style={{ fontSize: 12, opacity: 0.55 }}>Nudges arrive silently. Prayer reminders still ring.</T>
+          </View>
+          <Toggle on={quiet.on} onChange={(on) => setQuiet((q) => ({ ...q, on }))} label="Quiet hours" />
+        </View>
+        {quiet.on && (
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+            <TimeStepper label="From" value={quiet.start} onChange={(start) => setQuiet((q) => ({ ...q, start }))} />
+            <TimeStepper label="Until" value={quiet.end} onChange={(end) => setQuiet((q) => ({ ...q, end }))} />
+          </View>
+        )}
+      </View>
       <T onPress={() => save(false)} style={{ textAlign: 'center', marginTop: 18, fontSize: 14, opacity: 0.6 }}>
         Save without notifications
       </T>
     </Screen>
+  );
+}
+
+const toMin = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+const toTime = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+const label12 = (min: number) => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
+
+/** Half-hour steps around the clock. */
+function TimeStepper({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const step = (d: number) => onChange((value + d + 1440) % 1440);
+  const btn = { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' } as const;
+  return (
+    <View style={{ flex: 1, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.06)', padding: 10 }}>
+      <T style={{ fontSize: 12, opacity: 0.55, textAlign: 'center' }}>{label}</T>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+        <Tap onPress={() => step(-30)} accessibilityLabel={`${label} 30 minutes earlier`} style={btn}>
+          <Icon n="minus" s={14} />
+        </Tap>
+        <T style={{ fontSize: 16, fontWeight: '600' }}>{label12(value)}</T>
+        <Tap onPress={() => step(30)} accessibilityLabel={`${label} 30 minutes later`} style={btn}>
+          <Icon n="plus" s={14} />
+        </Tap>
+      </View>
+    </View>
   );
 }

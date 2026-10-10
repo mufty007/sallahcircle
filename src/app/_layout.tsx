@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { wrapRoot } from '@/lib/monitoring';
 import { AppStateProvider } from '@/state/app-state';
 import { SessionProvider } from '@/state/session';
 import { SC } from '@/theme/colors';
@@ -20,7 +21,7 @@ SplashScreen.preventAutoHideAsync();
 
 const theme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: SC.navy, card: SC.navy, primary: SC.mint } };
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded, error] = useFonts({
     Outfit_300Light,
     Outfit_400Regular,
@@ -48,6 +49,7 @@ export default function RootLayout() {
             <Stack.Screen name="(onboarding)" options={{ animation: 'fade' }} />
             <Stack.Screen name="log-prayer" options={sheet} />
             <Stack.Screen name="nudge/[id]" options={sheet} />
+            <Stack.Screen name="report" options={sheet} />
             <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
           </Stack>
         </AppStateProvider>
@@ -56,3 +58,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default wrapRoot(RootLayout);

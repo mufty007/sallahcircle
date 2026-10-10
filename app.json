@@ -53,7 +53,29 @@
           "microphonePermission": "Salah Circle uses the microphone so you can send short voice nudges to your circle."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-sharing",
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "NextPrayer",
+              "displayName": "Next prayer",
+              "description": "Countdown to the next prayer.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "accessoryRectangular",
+                  "accessoryInline"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

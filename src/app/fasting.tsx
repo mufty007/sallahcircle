@@ -7,7 +7,7 @@ import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { countdown, loadFasts, setFast, useQuery, type FastKind } from '@/lib/data';
 import { formatTime } from '@/lib/prayer-times';
-import { useMyDay } from '@/lib/today';
+import { useHijriToday, useMyDay } from '@/lib/today';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
@@ -25,7 +25,7 @@ export default function FastingScreen() {
   const fasts = useQuery(me ? `fasts:${me}:${since}` : null, () => loadFasts(me!, since));
   const [busy, setBusy] = useState<FastKind | 'none' | null>(null);
 
-  const hijri = day?.hijri;
+  const hijri = useHijriToday(todayIso, profile?.hijri_offset ?? 0, day?.hijri);
   const ramadan = hijri?.month.number === 9;
   const todayFast = fasts.data?.find((f) => f.fastedOn === todayIso);
 

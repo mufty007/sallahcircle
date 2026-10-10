@@ -6,7 +6,7 @@ import { glass, hairline, RoundBtn } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { isoDate, loadLogs, useNow, useQuery } from '@/lib/data';
-import { fetchHijriMonth, fetchMonth, formatTime } from '@/lib/prayer-times';
+import { fetchHijriMonthAdjusted, fetchMonth, formatTime } from '@/lib/prayer-times';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
@@ -23,7 +23,8 @@ export default function CalendarScreen() {
   const shift = (d: number) => setYm(({ y, m }) => (m + d < 1 ? { y: y - 1, m: 12 } : m + d > 12 ? { y: y + 1, m: 1 } : { y, m: m + d }));
 
   const monthKey = `${ym.y}-${pad(ym.m)}`;
-  const hijri = useQuery(`hijri:${monthKey}`, () => fetchHijriMonth(ym.y, ym.m));
+  const offset = profile?.hijri_offset ?? 0;
+  const hijri = useQuery(`hijri:${monthKey}:${offset}`, () => fetchHijriMonthAdjusted(ym.y, ym.m, offset));
   const place = profile?.latitude != null && profile.longitude != null ? { latitude: profile.latitude, longitude: profile.longitude, timezone: tz } : null;
   const times = useQuery(place ? `month:${monthKey}:${place.latitude},${place.longitude},${profile?.calc_method},${profile?.asr_method}` : null, () =>
     fetchMonth(place!, profile!.calc_method, profile!.asr_method, ym.y, ym.m),

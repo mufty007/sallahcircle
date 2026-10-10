@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
-import { Av, Cell, Chip, glass, Tap } from '@/components/ui/primitives';
+import { Av, Cell, Chip, glass, RoundBtn, Tap } from '@/components/ui/primitives';
 import { BackBar, Screen } from '@/components/ui/screen';
+import { safetyMenu } from '@/components/safety';
 import { InkContext, T } from '@/components/ui/text';
-import { isoDate, loadLogs, loadMemberSchedules, loadStreaks, removeMember, shortIn, statusRow, useMyCircles, useNow, useQuery } from '@/lib/data';
+import { isoDate, loadLogs, useBlocked, loadMemberSchedules, loadStreaks, removeMember, shortIn, statusRow, useMyCircles, useNow, useQuery } from '@/lib/data';
 import { formatTime, PRAYER_LABEL } from '@/lib/prayer-times';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
@@ -18,6 +19,8 @@ export default function MemberScreen() {
   const { session, profile } = useSession();
   const now = useNow(30_000);
   const [removing, setRemoving] = useState(false);
+  const blocked = useBlocked(session?.user.id);
+  const isBlocked = !!blocked.data?.has(id);
   const circles = useMyCircles(session?.user.id);
   const shared = (circles.data ?? []).filter((c) => c.members.some((m) => m.id === id));
   const m = shared.flatMap((c) => c.members).find((x) => x.id === id);
@@ -53,7 +56,7 @@ export default function MemberScreen() {
   const weekLogged = days.reduce((n, { date }) => n + all.filter((l) => l.prayed_on === date && l.status !== 'missed').length, 0);
 
   return (
-    <Screen bg="member" header={<BackBar />}>
+    <Screen bg="member" header={<BackBar right={!m.you && <RoundBtn n="more" accessibilityLabel={`More options for ${m.name}`} onPress={() => safetyMenu(m.id, m.name, isBlocked)} />} />}>
       <View style={{ alignItems: 'center', marginTop: 4 }}>
         <Av m={m} s={88} />
         <T style={{ fontSize: 30, fontWeight: '700', letterSpacing: -0.8, marginTop: 12 }}>{m.name}</T>
@@ -80,7 +83,13 @@ export default function MemberScreen() {
           </View>
         </View>
       )}
-      {!m.you && !m.paused && (
+      {!m.you && isBlocked && (
+        <View style={[glass, { marginHorizontal: 16, marginTop: 24, padding: 18 }]}>
+          <T style={{ fontSize: 17, fontWeight: '600' }}>You blocked {m.name}</T>
+          <T style={{ fontSize: 13, opacity: 0.6, marginTop: 2 }}>Neither of you can nudge the other. Unblock from the ⋯ menu.</T>
+        </View>
+      )}
+      {!m.you && !m.paused && !isBlocked && (
         <View style={{ marginHorizontal: 16, marginTop: 24, borderRadius: 28, backgroundColor: SC.mint, padding: 18 }}>
           <InkContext value={SC.ink}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
