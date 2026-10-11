@@ -160,24 +160,30 @@ export type Database = {
       }
       excused_periods: {
         Row: {
+          continued: boolean
           created_at: string
           ended_on: string | null
+          expected_days: number | null
           id: string
           kind: Database["public"]["Enums"]["excuse_kind"]
           started_on: string
           user_id: string
         }
         Insert: {
+          continued?: boolean
           created_at?: string
           ended_on?: string | null
+          expected_days?: number | null
           id?: string
           kind?: Database["public"]["Enums"]["excuse_kind"]
           started_on: string
           user_id?: string
         }
         Update: {
+          continued?: boolean
           created_at?: string
           ended_on?: string | null
+          expected_days?: number | null
           id?: string
           kind?: Database["public"]["Enums"]["excuse_kind"]
           started_on?: string

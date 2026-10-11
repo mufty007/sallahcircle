@@ -23,7 +23,7 @@ export async function exportMyData(userId: string) {
     all(supabase.from('fast_logs').select('*').eq('user_id', userId)),
     all(supabase.from('qada_counts').select('*').eq('user_id', userId)),
     all(supabase.from('sunnah_logs').select('*').eq('user_id', userId)),
-    all(supabase.from('excused_periods').select('kind, started_on, ended_on').eq('user_id', userId)),
+    all(supabase.from('excused_periods').select('kind, started_on, ended_on, expected_days, continued').eq('user_id', userId)),
     all(supabase.from('blocks').select('blocked, created_at').eq('blocker', userId)),
     all(supabase.from('reports').select('reason, details, status, created_at').eq('reporter', userId)),
   ]);

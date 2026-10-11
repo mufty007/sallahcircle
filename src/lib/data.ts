@@ -304,12 +304,33 @@ export async function loadStreaks(userIds: string[]): Promise<Map<string, number
 }
 
 // ─── Excused days (private) ────────────────────────────────────
-export type ExcusedPeriod = { id: string; kind: Enums<'excuse_kind'>; startedOn: string; endedOn: string | null };
+export type ExcusedPeriod = {
+  id: string;
+  kind: Enums<'excuse_kind'>;
+  startedOn: string;
+  endedOn: string | null;
+  /** Length they asked to be reminded after. Null on entries logged before this existed. */
+  expectedDays: number | null;
+  /** They chose to keep the period going after it passed that length. */
+  continued: boolean;
+};
 
 export async function loadExcused(userId: string): Promise<ExcusedPeriod[]> {
-  const { data, error } = await supabase.from('excused_periods').select('id, kind, started_on, ended_on').eq('user_id', userId).order('started_on', { ascending: false }).limit(60);
+  const { data, error } = await supabase
+    .from('excused_periods')
+    .select('id, kind, started_on, ended_on, expected_days, continued')
+    .eq('user_id', userId)
+    .order('started_on', { ascending: false })
+    .limit(60);
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, kind: r.kind, startedOn: r.started_on, endedOn: r.ended_on }));
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    startedOn: r.started_on,
+    endedOn: r.ended_on,
+    expectedDays: r.expected_days,
+    continued: r.continued,
+  }));
 }
 
 /** Only loads for people who opted in. */
@@ -323,7 +344,7 @@ export function excusedDates(periods: ExcusedPeriod[] | null | undefined, today:
   for (const p of periods ?? []) {
     const d = new Date(`${p.startedOn}T12:00:00Z`);
     const end = p.endedOn ?? today;
-    for (let i = 0; i < 90 && d.toISOString().slice(0, 10) <= end; i++) {
+    for (let i = 0; i < 500 && d.toISOString().slice(0, 10) <= end; i++) {
       out.add(d.toISOString().slice(0, 10));
       d.setUTCDate(d.getUTCDate() + 1);
     }
@@ -331,15 +352,42 @@ export function excusedDates(periods: ExcusedPeriod[] | null | undefined, today:
   return out;
 }
 
-export async function startExcused(kind: Enums<'excuse_kind'>, startedOn: string) {
-  const { error } = await supabase.from('excused_periods').insert({ kind, started_on: startedOn });
-  if (error) throw error.code === '23505' ? new Error('You already have excused days in progress.') : error;
+const excusedError = (error: { code?: string; message: string }) => {
+  if (error.code === '23505') return new Error('You already have excused days in progress.');
+  if (/overlap/i.test(error.message)) return new Error('Those dates overlap another entry.');
+  return new Error(error.message);
+};
+
+export async function startExcused(kind: Enums<'excuse_kind'>, startedOn: string, expectedDays: number) {
+  const { error } = await supabase.from('excused_periods').insert({ kind, started_on: startedOn, expected_days: expectedDays });
+  if (error) throw excusedError(error);
+  invalidate();
+}
+
+/** A finished period, for history. It does not pause reminders. */
+export async function logExcused(kind: Enums<'excuse_kind'>, startedOn: string, endedOn: string) {
+  if (endedOn < startedOn) throw new Error('The end date can’t be before the start.');
+  const { error } = await supabase.from('excused_periods').insert({ kind, started_on: startedOn, ended_on: endedOn });
+  if (error) throw excusedError(error);
+  invalidate();
+}
+
+export async function setExpectedDays(id: string, expectedDays: number) {
+  const { error } = await supabase.from('excused_periods').update({ expected_days: expectedDays, continued: false }).eq('id', id);
+  if (error) throw error;
+  invalidate();
+}
+
+/** Keep the period open past the length they set, and stop reminding them about it. */
+export async function continueExcused(id: string) {
+  const { error } = await supabase.from('excused_periods').update({ continued: true }).eq('id', id);
+  if (error) throw error;
   invalidate();
 }
 
 export async function endExcused(id: string, endedOn: string) {
   const { error } = await supabase.from('excused_periods').update({ ended_on: endedOn }).eq('id', id);
-  if (error) throw error;
+  if (error) throw excusedError(error);
   invalidate();
 }
 

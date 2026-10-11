@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 
+import { addDays, localDateTime } from './cycle';
 import { currentPushToken, notificationsSupported, registerForNotifications } from './notifications';
 import { fetchMonth, formatTime, PRAYER_KEYS, PRAYER_LABEL, shiftHijri, type DayTimes, type PrayerKey } from './prayer-times';
 import { supabase, type Profile } from './supabase';
@@ -33,16 +34,42 @@ export async function prepareNotifications() {
   return N;
 }
 
-type Kind = 'at' | 'before' | 'jumuah' | 'fast' | 'recap';
+type Kind = 'at' | 'before' | 'jumuah' | 'fast' | 'recap' | 'excused';
 type Planned = { id: string; at: Date; title: string; body: string; silent: boolean; data: { prayer?: PrayerKey; date: string; kind: Kind } };
 
 /** DD-MM-YYYY → YYYY-MM-DD */
 const iso = (dmy: string) => dmy.split('-').reverse().join('-');
 
+/** One reminder, the morning after the length they set, including while prayer reminders are paused. */
+async function excusedLimit(userId: string, profile: Profile, nowMs: number): Promise<Planned | null> {
+  if (!profile.track_excused) return null;
+  const { data, error } = await supabase
+    .from('excused_periods')
+    .select('started_on, expected_days, continued')
+    .eq('user_id', userId)
+    .is('ended_on', null)
+    .maybeSingle();
+  if (error || !data?.expected_days || data.continued) return null;
+  const date = addDays(data.started_on, data.expected_days);
+  const at = localDateTime(date, 8, 0, profile.timezone);
+  if (at.getTime() <= nowMs + 5_000) return null;
+  return {
+    id: 'excused-limit',
+    at,
+    title: 'Excused days',
+    body: `This is longer than the ${data.expected_days} days you set. You can end them or continue.`,
+    silent: false,
+    data: { date, kind: 'excused' },
+  };
+}
+
 async function plan(userId: string, profile: Profile, daysAhead: number, cap: number): Promise<Planned[]> {
-  if (profile.latitude == null || profile.longitude == null) return [];
-  // Excused days: no prayer or fasting reminders until they end.
-  if (profile.paused_since) return [];
+  const nowMs = Date.now();
+  const notice = await excusedLimit(userId, profile, nowMs);
+  const withNotice = (rest: Planned[]) => (notice ? [notice, ...rest.filter((n) => n.id !== notice.id)].slice(0, cap) : rest);
+  if (profile.latitude == null || profile.longitude == null) return withNotice([]);
+  // Excused days: no prayer or fasting reminders until they end. The length reminder still goes out.
+  if (profile.paused_since) return withNotice([]);
   const place = { latitude: profile.latitude, longitude: profile.longitude, timezone: profile.timezone };
 
   const [r, s] = await Promise.all([
@@ -56,7 +83,7 @@ async function plan(userId: string, profile: Profile, daysAhead: number, cap: nu
   const fasting = s.data?.fasting_reminders ?? false;
   const jumuah = s.data?.jumuah_reminder ?? true;
 
-  const start = Date.now();
+  const start = nowMs;
   // This month and next (two requests), trimmed to the window starting today.
   const now = new Date(start);
   const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
@@ -126,7 +153,7 @@ async function plan(userId: string, profile: Profile, daysAhead: number, cap: nu
   // Extras are few, so they're always kept; prayer reminders fill the remaining slots.
   const upcoming = (list: Planned[]) => list.filter((n) => n.at.getTime() > start + 5_000).sort((a, b) => a.at.getTime() - b.at.getTime());
   const kept = upcoming(extras).slice(0, Math.min(12, cap));
-  return [...kept, ...upcoming(out).slice(0, cap - kept.length)].sort((a, b) => a.at.getTime() - b.at.getTime());
+  return withNotice([...kept, ...upcoming(out).slice(0, cap - kept.length)].sort((a, b) => a.at.getTime() - b.at.getTime()));
 }
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -224,6 +251,7 @@ export async function listenForReminderTaps() {
     if (data?.type === 'nudge') router.push('/activity');
     else if (data?.kind === 'fast') router.push('/fasting');
     else if (data?.kind === 'recap') router.push('/me');
+    else if (data?.kind === 'excused') router.push('/excused');
     else if (data?.kind === 'at' && data.prayer && data.date) {
       router.push({ pathname: '/log-prayer', params: { prayer: data.prayer, date: data.date } });
     }

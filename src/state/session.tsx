@@ -14,7 +14,7 @@ type SessionState = {
   session: Session | null;
   profile: Profile | null;
   onboarded: boolean;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<Profile | null>;
   updateProfile: (patch: ProfilePatch) => Promise<Profile>;
   signOut: () => Promise<void>;
 };
@@ -42,11 +42,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) return null;
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (error) console.warn('Failed to load profile', error.message);
     setProfile(data ?? null);
     setProfileFor(userId);
+    return data ?? null;
   }, [userId]);
 
   useEffect(() => {
