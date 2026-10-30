@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
 
 import { LocationPrompt } from '@/components/location-prompt';
@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { Av, Btn, Chip, RoundBtn, Stars, Tap } from '@/components/ui/primitives';
 import { Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
+import { cycleInfo } from '@/lib/cycle';
 import { countdown, excusedDates, isoDate, loadLogs, loadMemberSchedules, shortIn, statusRow, streakFrom, useExcused, useInbox, useMyCircles, useQuery } from '@/lib/data';
 import { formatTime, PRAYER_KEYS, PRAYER_LABEL } from '@/lib/prayer-times';
 import { useMyDay } from '@/lib/today';
@@ -19,7 +20,7 @@ import { SC } from '@/theme/colors';
 const NUDGE_WINDOW_MS = 30 * 60_000;
 
 export default function TodayScreen() {
-  const { session } = useSession();
+  const { session, profile: sessionProfile, updateProfile } = useSession();
   const { cycleSky } = useAppState();
   const { width } = useWindowDimensions();
   const me = session?.user.id;
@@ -32,7 +33,6 @@ export default function TodayScreen() {
   const circle = circles.data?.[0] ?? null;
   const others = circle?.members.filter((m) => !m.you) ?? [];
 
-  // Members' next prayers (refreshed each minute) and the last 60 days of logs.
   const minuteKey = Math.floor(now.getTime() / 60_000);
   const schedules = useQuery(circle ? `schedules:${circle.id}:${others.map((m) => m.id).join(',')}:${minuteKey}` : null, () => loadMemberSchedules(others));
   const since = isoDate(new Date(now.getTime() - 60 * 86_400_000), tz);
@@ -48,7 +48,6 @@ export default function TodayScreen() {
   const paused = !!profile?.paused_since;
   const streak = me ? streakFrom(logs.data ?? [], me, todayIso, excusedDates(excused.data, todayIso)) : 0;
 
-  // The prayer whose time has most recently started is the one to log from the dial.
   const current = day ? [...PRAYER_KEYS].reverse().find((p) => day.times[p] <= now) : undefined;
 
   const active = (schedules.data ?? []).filter((s) => !s.member.paused);
@@ -57,6 +56,98 @@ export default function TodayScreen() {
   const cardSub = dueSoon ? `${dueSoon} could use a nudge` : schedules.data?.length ? 'All quiet for now' : '';
 
   const openLog = (prayer: (typeof PRAYER_KEYS)[number]) => router.push({ pathname: '/log-prayer', params: { prayer, date: todayIso } });
+
+  if (paused) {
+    const c = cycleInfo(excused.data, todayIso);
+    const myCircles = circles.data ?? [];
+    const periodCard = { backgroundColor: 'rgba(42,21,56,0.55)', borderColor: 'rgba(245,163,199,0.28)' };
+    return (
+      <Screen bg="period" dark withTabBar>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16 }}>
+          <Chip bg="rgba(255,255,255,0.14)" style={{ height: 40, paddingHorizontal: 14 }} textStyle={{ fontSize: 15, fontWeight: '600' }} onPress={() => router.push('/excused')}>
+            <Icon n="moon" s={16} c={SC.pink} />
+            Excused
+            <Icon n="chev" s={16} />
+          </Chip>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Chip bg="rgba(255,255,255,0.14)" style={{ height: 40 }} textStyle={{ fontSize: 15, fontWeight: '600' }} onPress={() => router.push('/me')}>
+              <Icon n="flame" s={17} c={SC.amber} />
+              {String(streak)}
+            </Chip>
+            <RoundBtn n="bell" bg="rgba(255,255,255,0.14)" dot={unread} onPress={() => router.push('/activity')} />
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 24, marginTop: 28 }}>
+          <T style={{ fontSize: 13, fontWeight: '600', letterSpacing: 1.2, color: SC.pink, opacity: 0.9 }}>REST & RECOVER</T>
+          <T style={{ fontSize: 40, fontWeight: '700', letterSpacing: -1.2, lineHeight: 44, marginTop: 8 }}>Day {c.day ?? '—'}</T>
+          <T style={{ fontSize: 15, opacity: 0.7, marginTop: 8, lineHeight: 22 }}>
+            Prayer logging is paused so your streak stays safe. Your circles are still here for you.
+          </T>
+        </View>
+
+        <ExcusedCard today={todayIso} dark card={periodCard} />
+
+        <View style={{ marginHorizontal: 16, marginTop: 8, borderRadius: 28, padding: 16, borderWidth: 1, ...periodCard }}>
+          <T style={{ fontSize: 16, fontWeight: '600' }}>Your circles</T>
+          <T style={{ fontSize: 13, opacity: 0.6, marginTop: 4, marginBottom: 8 }}>You’re still in these groups — mates see you as Paused.</T>
+          {circles.loading && <ActivityIndicator color={SC.pink} style={{ marginVertical: 12 }} />}
+          {!circles.loading && myCircles.length === 0 && (
+            <Btn kind="mint" style={{ height: 48, backgroundColor: SC.lilac }} textStyle={{ fontSize: 15 }} onPress={() => router.push('/find-circle')}>
+              Find a circle
+            </Btn>
+          )}
+          {myCircles.map((cir, i) => (
+            <Tap
+              key={cir.id}
+              onPress={() => router.push(`/circle/${cir.id}`)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingVertical: 12,
+                borderTopWidth: i ? 1 : 0,
+                borderTopColor: 'rgba(255,255,255,0.08)',
+              }}>
+              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: cir.color, alignItems: 'center', justifyContent: 'center' }}>
+                <T style={{ fontWeight: '700', color: SC.ink }}>{cir.name[0]?.toUpperCase()}</T>
+              </View>
+              <View style={{ flex: 1 }}>
+                <T style={{ fontSize: 15, fontWeight: '600' }}>{cir.name}</T>
+                <T style={{ fontSize: 12, opacity: 0.55 }}>{cir.members.length} members</T>
+              </View>
+              <Icon n="chev" s={16} c="rgba(255,255,255,0.4)" />
+            </Tap>
+          ))}
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 16, marginTop: 12 }}>
+          <Tap
+            onPress={() => router.push('/excused')}
+            style={{ flex: 1, borderRadius: 22, padding: 16, borderWidth: 1, ...periodCard }}>
+            <Icon n="cal" s={20} c={SC.lilac} />
+            <T style={{ fontSize: 15, fontWeight: '600', marginTop: 10 }}>History</T>
+            <T style={{ fontSize: 12, opacity: 0.55, marginTop: 2 }}>Cycles & flow</T>
+          </Tap>
+          <Tap
+            onPress={() => router.push('/cycle-learn' as Href)}
+            style={{ flex: 1, borderRadius: 22, padding: 16, borderWidth: 1, ...periodCard }}>
+            <Icon n="moon" s={20} c={SC.pink} />
+            <T style={{ fontSize: 15, fontWeight: '600', marginTop: 10 }}>Learn</T>
+            <T style={{ fontSize: 12, opacity: 0.55, marginTop: 2 }}>Fiqh & care</T>
+          </Tap>
+        </View>
+
+        {!!sessionProfile?.traveling && (
+          <Tap
+            onPress={() => updateProfile({ traveling: false }).catch(() => {})}
+            style={{ marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: 'rgba(135,232,191,0.12)' }}>
+            <T style={{ fontSize: 13, opacity: 0.8 }}>Traveling is on · tap to turn off</T>
+          </Tap>
+        )}
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -86,6 +177,11 @@ export default function TodayScreen() {
           <Icon n="chev" s={16} />
         </Chip>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          {!!profile?.traveling && (
+            <Chip bg={btn} style={{ height: 40 }} textStyle={{ fontSize: 13, fontWeight: '600' }} onPress={() => updateProfile({ traveling: false }).catch(() => {})}>
+              Traveling
+            </Chip>
+          )}
           <Chip bg={btn} style={{ height: 40 }} textStyle={{ fontSize: 15, fontWeight: '600' }} onPress={() => router.push('/me')}>
             <Icon n="flame" s={17} />
             {String(streak)}
@@ -96,9 +192,8 @@ export default function TodayScreen() {
 
       <LocationPrompt dark={dark} />
 
-      {/* Tap the dial to log the current prayer; long-press to preview other skies. */}
       <Tap
-        onPress={() => current && !paused && openLog(current)}
+        onPress={() => current && openLog(current)}
         onLongPress={cycleSky}
         accessibilityLabel={next ? `${PRAYER_LABEL[next.key]} in ${countdown(next.at.getTime() - now.getTime())}. Tap to log a prayer.` : 'Prayer times'}
         style={{ alignSelf: 'center', marginTop: 8 }}>
@@ -124,19 +219,15 @@ export default function TodayScreen() {
         </View>
       </Tap>
 
-      {paused ? (
-        <ExcusedCard today={todayIso} dark={dark} card={card} />
-      ) : (
-        <View style={{ marginTop: 10 }}>
-          <PrayerRow
-            st={myRow.length ? myRow : ['u', 'u', 'u', 'u', 'u']}
-            dark={dark}
-            times={day ? PRAYER_KEYS.map((p) => formatTime(day.times[p], tz)) : undefined}
-            onPress={(i) => day && day.times[PRAYER_KEYS[i]] <= now && openLog(PRAYER_KEYS[i])}
-          />
-        </View>
-      )}
-      {!paused && <ExcusedCard today={todayIso} dark={dark} card={card} />}
+      <View style={{ marginTop: 10 }}>
+        <PrayerRow
+          st={myRow.length ? myRow : ['u', 'u', 'u', 'u', 'u']}
+          dark={dark}
+          times={day ? PRAYER_KEYS.map((p) => formatTime(day.times[p], tz)) : undefined}
+          onPress={(i) => day && day.times[PRAYER_KEYS[i]] <= now && openLog(PRAYER_KEYS[i])}
+        />
+      </View>
+      <ExcusedCard today={todayIso} dark={dark} card={card} />
 
       <View style={{ marginHorizontal: 16, marginTop: 16, borderRadius: 28, paddingTop: 14, paddingHorizontal: 16, paddingBottom: circle && queue.length ? 2 : 16, borderWidth: 1, ...card }}>
         {!circle ? (

@@ -1,20 +1,38 @@
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 
 import { DayPicker } from '@/components/day-picker';
 import { Icon } from '@/components/ui/icon';
-import { Btn, glass, hairline, Kicker, Label, Ring, RoundBtn, Segmented, Tap } from '@/components/ui/primitives';
+import { Btn, Chip, glass, hairline, Kicker, Label, Ring, RoundBtn, Segmented, Tap } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { addDays, cycleInfo, daysBetween, isPastLimit, niceDate, rangesOverlap, suggestDays } from '@/lib/cycle';
-import { continueExcused, deleteExcused, endExcused, excusedDates, isoDate, logExcused, setExpectedDays, startExcused, useExcused, useNow, type ExcusedPeriod } from '@/lib/data';
+import {
+  continueExcused,
+  deleteExcused,
+  endExcused,
+  excusedDates,
+  flowStats,
+  isoDate,
+  logExcused,
+  setExpectedDays,
+  startExcused,
+  upsertFlowDay,
+  useExcused,
+  useFlowDays,
+  useNow,
+  type ExcusedPeriod,
+} from '@/lib/data';
 import { syncReminders } from '@/lib/reminders';
 import type { Enums } from '@/lib/supabase';
+import { usePeriodTheme } from '@/state/period-theme';
 import { useSession } from '@/state/session';
 import { SC } from '@/theme/colors';
 
 const KIND_LABEL: Record<Enums<'excuse_kind'>, string> = { hayd: 'Ḥayḍ', nifas: 'Nifās' };
-const LILAC = '#C7AFF5';
+const LILAC = SC.lilac;
+const FLOW_LABEL: Record<Enums<'flow_intensity'>, string> = { light: 'Light', medium: 'Medium', heavy: 'Heavy' };
 const days = daysBetween;
 const nice = niceDate;
 
@@ -32,11 +50,15 @@ function DayCount({ value, onChange }: { value: number; onChange: (n: number) =>
 
 export default function ExcusedScreen() {
   const { session, profile, refreshProfile } = useSession();
+  const periodTheme = usePeriodTheme();
   const me = session?.user.id;
   const now = useNow(60_000);
   const today = isoDate(now, profile?.timezone);
   const periods = useExcused(me, true);
+  const flow = useFlowDays(me, true);
   const open = periods.data?.find((p) => !p.endedOn);
+  const flowToday = flow.data?.find((f) => f.onDate === today);
+  const statsFlow = flowStats(flow.data);
   const [kind, setKind] = useState<Enums<'excuse_kind'>>('hayd');
   const [startOn, setStartOn] = useState(today);
   const [expected, setExpected] = useState<number | null>(null);
@@ -104,12 +126,23 @@ export default function ExcusedScreen() {
     void run('log', () => logExcused(logKind, start, end));
   };
 
+  const monthKey = today.slice(0, 7);
+  const monthDays = (() => {
+    const y = Number(monthKey.slice(0, 4));
+    const m = Number(monthKey.slice(5, 7));
+    const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return Array.from({ length: n }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, '0')}`);
+  })();
+
   return (
-    <Screen bg="navy" header={<BackBar />}>
+    <Screen bg={periodTheme.active ? 'period-inner' : 'navy'} header={<BackBar right={<RoundBtn n="moon" onPress={() => router.push('/cycle-learn' as Href)} />} />}>
       <PageTitle k="PRIVATE TO YOU" t="Excused days" style={{ marginTop: 16 }} />
       <T style={{ marginHorizontal: 24, marginTop: 8, fontSize: 14, opacity: 0.6, lineHeight: 20 }}>
         While excused, your streak is kept, prayer reminders pause and your circle just sees “Paused”. Nobody sees why.
       </T>
+      <Tap onPress={() => router.push('/cycle-learn' as Href)} style={{ marginHorizontal: 24, marginTop: 10 }}>
+        <T style={{ fontSize: 14, fontWeight: '600', color: periodTheme.active ? SC.pink : SC.mint }}>Learn about rest, ghusl & care →</T>
+      </Tap>
       {error && <T style={{ color: SC.coral, fontSize: 14, marginTop: 10, marginHorizontal: 24 }}>{error}</T>}
 
       {periods.data && (
@@ -157,6 +190,50 @@ export default function ExcusedScreen() {
         </View>
       )}
 
+      <View style={[glass, { marginHorizontal: 16, marginTop: 12, padding: 16 }]}>
+        <T style={{ fontSize: 14, fontWeight: '600' }}>This month</T>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 12 }}>
+          {monthDays.map((d) => (
+            <View
+              key={d}
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 3,
+                backgroundColor: excusedSet.has(d) ? LILAC : 'rgba(255,255,255,0.08)',
+                borderWidth: d === today ? 1 : 0,
+                borderColor: SC.pink,
+              }}
+            />
+          ))}
+        </View>
+        <T style={{ fontSize: 11, opacity: 0.45, marginTop: 8 }}>
+          {monthDays.filter((d) => excusedSet.has(d)).length} excused days in {new Date(`${monthKey}-01T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+        </T>
+      </View>
+
+      {statsFlow.total > 0 && (
+        <View style={[glass, { marginHorizontal: 16, marginTop: 12, padding: 16 }]}>
+          <T style={{ fontSize: 14, fontWeight: '600' }}>Flow analytics</T>
+          <T style={{ fontSize: 12, opacity: 0.55, marginTop: 4 }}>From days you’ve logged (optional).</T>
+          {(['light', 'medium', 'heavy'] as const).map((k) => {
+            const n = statsFlow[k];
+            const pct = statsFlow.total ? n / statsFlow.total : 0;
+            return (
+              <View key={k} style={{ marginTop: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <T style={{ fontSize: 13 }}>{FLOW_LABEL[k]}</T>
+                  <T style={{ fontSize: 13, opacity: 0.6 }}>{n}</T>
+                </View>
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 4, overflow: 'hidden' }}>
+                  <View style={{ width: `${Math.round(pct * 100)}%`, height: '100%', backgroundColor: k === 'heavy' ? SC.coral : k === 'medium' ? SC.pink : LILAC }} />
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {periods.loading && !periods.data ? (
         <ActivityIndicator style={{ marginTop: 40 }} color="#fff" />
       ) : open ? (
@@ -195,12 +272,27 @@ export default function ExcusedScreen() {
             </View>
           )}
 
+          <Label style={{ marginTop: 18 }}>Flow today (optional)</Label>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            {(['light', 'medium', 'heavy'] as const).map((f) => (
+              <Chip
+                key={f}
+                bg={flowToday?.flow === f ? SC.pink : 'rgba(255,255,255,0.08)'}
+                c={flowToday?.flow === f ? SC.ink : '#fff'}
+                style={{ height: 36 }}
+                textStyle={{ fontSize: 14 }}
+                onPress={() => run(`flow:${f}`, () => upsertFlowDay(open.id, today, f))}>
+                {FLOW_LABEL[f]}
+              </Chip>
+            ))}
+          </View>
+
           <Label style={{ marginTop: 18 }}>When did it end?</Label>
           <DayPicker value={finish} onChange={setFinishOn} min={open.startedOn} max={today} />
           <Btn
             kind={over ? 'ghost' : 'mint'}
             disabled={!!busy}
-            style={{ marginTop: 12, height: 50 }}
+            style={{ marginTop: 12, height: 50, ...(over ? {} : { backgroundColor: periodTheme.active ? SC.lilac : SC.mint }) }}
             textStyle={{ fontSize: 15 }}
             icon={busy === 'end' ? <ActivityIndicator color={over ? '#fff' : SC.ink} /> : undefined}
             onPress={() => run('end', () => endExcused(open.id, finish))}>

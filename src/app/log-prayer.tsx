@@ -2,14 +2,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
+import { DayEndOverlay, type DayEndKind } from '@/components/day-end-overlay';
 import { Sheet, useCloseSheet } from '@/components/sheet';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Btn, Chip, Tap, Toggle } from '@/components/ui/primitives';
 import { InkContext, T } from '@/components/ui/text';
-import { isoDate, loadMyLog, logPrayer, setSunnah, SUNNAH_FOR, unlogPrayer, useQuery, type MyLog, type SunnahKind } from '@/lib/data';
+import { isoDate, loadLogs, loadMyLog, logPrayer, setSunnah, SUNNAH_FOR, unlogPrayer, useQuery, type MyLog, type SunnahKind } from '@/lib/data';
 import { formatTime, PRAYER_KEYS, PRAYER_LABEL, type PrayerKey } from '@/lib/prayer-times';
 import { useMyDay } from '@/lib/today';
 import { SC } from '@/theme/colors';
+
+const COMBINABLE = new Set<PrayerKey>(['dhuhr', 'asr', 'maghrib', 'isha']);
 
 export default function LogPrayerSheet() {
   return (
@@ -35,7 +38,6 @@ function LogPrayerContent() {
       </View>
     );
   }
-  // Keyed so the form starts from what's saved for this prayer and day.
   return (
     <LogForm
       key={`${prayer}:${date}:${existing.data?.id ?? 'new'}`}
@@ -45,24 +47,48 @@ function LogPrayerContent() {
       existing={existing.data}
       userId={profile.id}
       trackSunnah={profile.track_sunnah}
+      traveling={!!profile.traveling}
+      ishaStarted={!!day && day.times.isha <= now}
     />
   );
 }
 
-function LogForm({ prayer, date, at, existing, userId, trackSunnah }: { prayer: PrayerKey; date: string; at: string; existing: MyLog | null; userId: string; trackSunnah: boolean }) {
+function LogForm({
+  prayer,
+  date,
+  at,
+  existing,
+  userId,
+  trackSunnah,
+  traveling,
+  ishaStarted,
+}: {
+  prayer: PrayerKey;
+  date: string;
+  at: string;
+  existing: MyLog | null;
+  userId: string;
+  trackSunnah: boolean;
+  traveling: boolean;
+  ishaStarted: boolean;
+}) {
   const close = useCloseSheet();
   const name = PRAYER_LABEL[prayer];
+  const canCombine = COMBINABLE.has(prayer);
 
   const [late, setLate] = useState(existing?.status === 'late');
   const [jamaah, setJamaah] = useState(existing?.inJamaah ?? false);
   const [masjid, setMasjid] = useState(existing?.atMasjid ?? false);
+  const [combined, setCombined] = useState(existing?.combined ?? (traveling && canCombine));
   const [saving, setSaving] = useState<'save' | 'tasbih' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dayEnd, setDayEnd] = useState<{ kind: DayEndKind; count: number } | null>(null);
 
   const extras: [IconName, string, string, boolean, (v: boolean) => void][] = [
     ['together', 'In jamāʿah', '+1 bonus point', jamaah, setJamaah],
     ['pin', 'At the masjid', 'Prayed at a masjid', masjid, setMasjid],
   ];
+  if (canCombine) extras.push(['wave', 'Combined (jamʿ)', traveling ? 'Traveling — Dhuhr+Asr or Maghrib+Isha' : 'Prayed as jamʿ', combined, setCombined]);
 
   const sunnahOptions = trackSunnah || existing?.sunnah.length ? SUNNAH_FOR[prayer] : [];
   const [sunnah, setSunnahState] = useState<Set<SunnahKind>>(() => new Set(existing?.sunnah ?? []));
@@ -74,16 +100,31 @@ function LogForm({ prayer, date, at, existing, userId, trackSunnah }: { prayer: 
       return next;
     });
 
+  const finish = (then?: 'tasbih') => {
+    if (then === 'tasbih') router.replace('/tasbih');
+    else close();
+  };
+
   const save = async (then?: 'tasbih') => {
     setSaving(then ?? 'save');
     setError(null);
     try {
-      await logPrayer({ prayer, prayedOn: date, status: late ? 'late' : 'on_time', inJamaah: jamaah, atMasjid: masjid });
-      // Only write sunnah ticks that changed.
+      await logPrayer({
+        prayer,
+        prayedOn: date,
+        status: late ? 'late' : 'on_time',
+        inJamaah: jamaah,
+        atMasjid: masjid,
+        combined: canCombine ? combined : false,
+      });
       const before = new Set(existing?.sunnah ?? []);
       await Promise.all(sunnahOptions.filter(({ kind }) => before.has(kind) !== sunnah.has(kind)).map(({ kind }) => setSunnah(userId, date, kind, sunnah.has(kind))));
-      if (then === 'tasbih') router.replace('/tasbih');
-      else close();
+
+      const logs = await loadLogs([userId], date);
+      const count = logs.filter((l) => l.user_id === userId && l.prayed_on === date && l.status !== 'missed').length;
+      const kind = await DayEndOverlay.decide(date, count, ishaStarted);
+      if (kind) setDayEnd({ kind, count });
+      else finish(then);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save.');
       setSaving(null);
@@ -103,11 +144,25 @@ function LogForm({ prayer, date, at, existing, userId, trackSunnah }: { prayer: 
     }
   };
 
+  if (dayEnd) {
+    return (
+      <DayEndOverlay
+        kind={dayEnd.kind}
+        count={dayEnd.count}
+        onDone={() => {
+          setDayEnd(null);
+          finish();
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <T style={{ fontSize: 13, fontWeight: '600', letterSpacing: 1, opacity: 0.5 }}>
         {name.toUpperCase()}
         {at ? ` · ${at}` : ''}
+        {traveling ? ' · TRAVELING' : ''}
       </T>
       <T style={{ fontSize: 30, fontWeight: '700', letterSpacing: -1, marginTop: 4 }}>{existing ? `Edit your ${name} log` : `Did you pray ${name}?`}</T>
 

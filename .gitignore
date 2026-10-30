@@ -45,3 +45,5 @@ example
 # Supabase local env
 .env
 supabase/.temp/
+
+google-service-account.json

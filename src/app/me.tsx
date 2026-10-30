@@ -3,12 +3,13 @@ import { View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Av, glass, hairline, Ring, RoundBtn, Tap } from '@/components/ui/primitives';
-import { Screen } from '@/components/ui/screen';
+import { BackBar, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { MEMBERS } from '@/data/mock';
 import { excusedDates, isoDate, loadLogs, streakFrom, useExcused, useMyCircles, useNow, useQuery } from '@/lib/data';
 import { METHODS } from '@/lib/prayer-times';
 import { supabase } from '@/lib/supabase';
+import { usePeriodTheme } from '@/state/period-theme';
 import { useSession } from '@/state/session';
 import { mintA, SC } from '@/theme/colors';
 
@@ -20,10 +21,12 @@ const heatColor = (n: number) => (n >= 5 ? SC.mint : n >= 3 ? mintA(0.6) : n >= 
 
 export default function MeScreen() {
   const { profile, session } = useSession();
+  const period = usePeriodTheme();
   const firstCircle = useMyCircles(session?.user.id).data?.[0];
   const me = { init: (profile?.display_name?.[0] ?? '?').toUpperCase(), color: profile?.avatar_color ?? MEMBERS[0].color, seed: profile?.avatar_seed ?? profile?.id };
   const method = METHODS.find((m) => m.id === profile?.calc_method)?.name ?? 'ISNA';
   const userId = session?.user.id;
+  const accent = period.active ? SC.pink : SC.mint;
   const now = useNow(60_000);
   const today = isoDate(now, profile?.timezone);
   // Grid ends on this week's Saturday so columns are Sun→Sat weeks.
@@ -86,11 +89,8 @@ export default function MeScreen() {
   ];
 
   return (
-    <Screen bg="inner" withTabBar>
-      <View style={{ alignItems: 'flex-end', paddingHorizontal: 16 }}>
-        <RoundBtn n="gear" onPress={() => router.push('/settings')} />
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, marginTop: -16 }}>
+    <Screen bg={period.active ? 'period-inner' : 'inner'} header={<BackBar right={<RoundBtn n="gear" onPress={() => router.push('/settings')} />} />}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, marginTop: 8 }}>
         <Av m={me} s={64} />
         <View>
           <T style={{ fontSize: 26, fontWeight: '700', letterSpacing: -0.5 }}>{profile?.display_name ?? 'You'}</T>
@@ -121,24 +121,31 @@ export default function MeScreen() {
         </View>
       </View>
 
-      <Tap onPress={() => router.push('/calendar')} style={[glass, { marginHorizontal: 16, marginTop: 14, padding: 16 }]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+      <View style={[glass, { marginHorizontal: 16, marginTop: 14, padding: 16 }]}>
+        <Tap onPress={() => router.push('/calendar')} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
           <T style={{ fontSize: 14, fontWeight: '600' }}>Last 12 weeks</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <T style={{ fontSize: 14, opacity: 0.55 }}>{onTimePct === null ? 'No logs yet' : `${onTimePct}% on time`}</T>
             <Icon n="chev" s={14} c="rgba(255,255,255,0.4)" />
           </View>
-        </View>
+        </Tap>
         <View style={{ flexDirection: 'row', gap: 4, height: 150 }}>
           {weeks.map((days, w) => (
             <View key={w} style={{ flex: 1, gap: 4 }}>
               {days.map((day) => (
-                <View key={day.date} style={{ flex: 1, borderRadius: 4, backgroundColor: day.future ? 'transparent' : day.excused && day.n < 5 ? EXCUSED : heatColor(day.n) }} />
+                <Tap
+                  key={day.date}
+                  disabled={day.future}
+                  onPress={() => router.push(`/day/${day.date}` as Href)}
+                  style={{ flex: 1, borderRadius: 4, backgroundColor: day.future ? 'transparent' : day.excused && day.n < 5 ? EXCUSED : heatColor(day.n) }}
+                  accessibilityLabel={`${day.date}, ${day.n} prayers`}
+                />
               ))}
             </View>
           ))}
         </View>
-      </Tap>
+        <T style={{ fontSize: 12, opacity: 0.45, marginTop: 10 }}>Tap a day for the full breakdown · open calendar for the month</T>
+      </View>
 
       <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 10 }}>
         {badges.map(([a, b, on]) => (
@@ -166,7 +173,7 @@ export default function MeScreen() {
         {tools.map(([icon, label, sub, href], i) => (
           <Tap key={label} onPress={() => router.push(href)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, height: 56, borderTopWidth: i ? 1 : 0, borderTopColor: hairline() }}>
             <View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon n={icon} s={18} c={SC.mint} />
+              <Icon n={icon} s={18} c={accent} />
             </View>
             <View style={{ flex: 1 }}>
               <T style={{ fontSize: 15, fontWeight: '600' }}>{label}</T>
@@ -182,7 +189,7 @@ export default function MeScreen() {
           onPress={() => (firstCircle ? router.push({ pathname: '/invite', params: { circle: firstCircle.id } }) : router.push('/create-circle'))}
           style={{ flexDirection: 'row', alignItems: 'center', height: 44 }}>
           <T style={{ flex: 1, opacity: 0.65, fontSize: 14 }}>{firstCircle ? `Invite friends to ${firstCircle.name}` : 'Start a circle'}</T>
-          <Icon n="share" s={16} c={SC.mint} style={{ marginLeft: 8 }} />
+          <Icon n="share" s={16} c={accent} style={{ marginLeft: 8 }} />
         </Tap>
         {[
           ['Location', [profile?.city, profile?.region].filter(Boolean).join(', ') || 'Not set'],

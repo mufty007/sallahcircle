@@ -12,6 +12,11 @@ export const SC = {
   lime: '#C8F56D',
   amber: '#FCBE62',
   coral: '#F07F77',
+  /** Period-mode accents (pink + purple). */
+  pink: '#F5A3C7',
+  lilac: '#C7AFF5',
+  plum: '#2A1538',
+  plum2: '#3D1F52',
 } as const;
 
 /** Mint with alpha, e.g. mintA(0.14). */
@@ -25,6 +30,18 @@ export type Gradient = {
 };
 
 export type Period = 'fajr' | 'dhuhr' | 'maghrib' | 'isha';
+
+/** Soft pink→purple wash used while an excused period is open. */
+export const PERIOD_SKY: Gradient = {
+  colors: ['#2A1538', '#5B2A66', '#C2588A', '#F5A3C7'],
+  locations: [0, 0.35, 0.7, 1],
+};
+
+export const PERIOD_INNER: Gradient & { height: number } = {
+  colors: ['#5B2A66', '#2A1538', SC.navy],
+  locations: [0, 0.55, 1],
+  height: 360,
+};
 
 export const SKY: Record<Period, Gradient> = {
   fajr: { colors: ['#0A1233', '#262C61', '#9A5E7E', '#F0B08A'], locations: [0, 0.42, 0.74, 1] },

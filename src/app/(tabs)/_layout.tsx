@@ -23,7 +23,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="qibla" options={{ title: 'Qibla' }} />
       <Tabs.Screen name="circles" options={{ title: 'Circles' }} />
       <Tabs.Screen name="board" options={{ title: 'Board' }} />
-      <Tabs.Screen name="me" options={{ title: 'Me' }} />
+      <Tabs.Screen name="more" options={{ title: 'More' }} />
     </Tabs>
   );
 }

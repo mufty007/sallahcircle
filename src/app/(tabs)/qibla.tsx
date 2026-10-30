@@ -1,9 +1,11 @@
 import { geoInterpolate } from 'd3-geo';
+import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, useWindowDimensions, View } from 'react-native';
-import { Circle, Rect, Text as SvgText } from 'react-native-svg';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { bearing, compassWord, distanceKm, Globe } from '@/components/globe';
 import { LocationPrompt } from '@/components/location-prompt';
@@ -41,7 +43,7 @@ export default function QiblaScreen() {
   const { profile } = useSession();
   const { width } = useWindowDimensions();
   const heading = useHeading();
-  const size = Math.min(360, width - 30);
+  const size = Math.min(320, width - 40);
 
   if (profile?.latitude == null || profile.longitude == null) {
     return (
@@ -62,52 +64,114 @@ export default function QiblaScreen() {
 }
 
 function QiblaView({ lng, lat, city, heading, size, unit }: { lng: number; lat: number; city: string | null; heading: number | null; size: number; unit: DistanceUnit }) {
-  // Primitive inputs let the compiler memoize these, so compass ticks don't re-project the globe.
   const home: [number, number] = [lng, lat];
   const brg = bearing(home, MAKKAH);
   const km = distanceKm(home, MAKKAH);
   const mid = geoInterpolate(home, MAKKAH)(0.5) as [number, number];
   const route: [[number, number], [number, number]] = [home, MAKKAH];
 
-  // Signed turn in (-180, 180]: positive = turn right.
   const turn = heading == null ? null : Math.round(((brg - heading + 540) % 360) - 180);
   const aligned = turn != null && Math.abs(turn) <= 3;
+
+  const wasAligned = useRef(false);
+  useEffect(() => {
+    if (aligned && !wasAligned.current && Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    wasAligned.current = aligned;
+  }, [aligned]);
+
+  const roseRot = useSharedValue(0);
+  useEffect(() => {
+    if (heading == null) return;
+    roseRot.value = withTiming(-heading, { duration: 100 });
+  }, [heading, roseRot]);
+
+  const roseStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${roseRot.value}deg` }] }));
+  const globeSize = Math.min(160, size * 0.55);
 
   return (
     <Screen bg="navy" withTabBar>
       <PageTitle k={city ? `FROM ${city.toUpperCase()}` : 'FROM YOUR LOCATION'} t="Qibla" style={{ marginTop: 8 }} />
       <LocationPrompt dark />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 24, marginTop: 14 }}>
-        <T style={{ fontSize: 96, fontWeight: '700', letterSpacing: -5, lineHeight: 92 }}>{brg}°</T>
-        <T style={{ paddingBottom: 10, fontSize: 15, opacity: 0.7, lineHeight: 20 }}>
-          {compassWord(brg)}
-          {'\n'}
-          {formatDistance(km, unit)} to Makkah
+
+      <View style={{ alignItems: 'center', marginTop: 8 }}>
+        <T style={{ fontSize: 15, opacity: 0.65, marginBottom: 6, textAlign: 'center', paddingHorizontal: 24 }}>
+          {heading == null ? 'Compass unavailable — use the bearing below' : 'Hold flat. Turn until the Kaʿbah lines up.'}
         </T>
+
+        <View
+          style={{
+            width: 0,
+            height: 0,
+            borderLeftWidth: 9,
+            borderRightWidth: 9,
+            borderBottomWidth: 14,
+            borderLeftColor: 'transparent',
+            borderRightColor: 'transparent',
+            borderBottomColor: aligned ? SC.mint : '#fff',
+            marginBottom: 6,
+          }}
+        />
+
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderWidth: 2,
+            borderColor: aligned ? SC.mint : mintA(0.25),
+            backgroundColor: aligned ? mintA(0.08) : 'rgba(8,12,30,0.55)',
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <Animated.View style={[{ width: size, height: size }, roseStyle]}>
+            <Svg width={size} height={size}>
+              <CompassRose size={size} qiblaDeg={brg} aligned={aligned} />
+            </Svg>
+          </Animated.View>
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              backgroundColor: aligned ? SC.mint : '#fff',
+              borderWidth: 3,
+              borderColor: SC.navy,
+            }}
+          />
+        </View>
+
+        <View style={{ marginTop: 14, alignItems: 'center', paddingHorizontal: 20 }}>
+          <T style={{ fontSize: 26, fontWeight: '700', color: aligned ? SC.mint : '#fff', textAlign: 'center' }}>
+            {turn == null ? `${brg}° ${compassWord(brg)}` : aligned ? 'You’re facing the Qibla' : `Turn ${Math.abs(turn)}° ${turn > 0 ? 'right' : 'left'}`}
+          </T>
+          <T style={{ fontSize: 14, opacity: 0.6, marginTop: 4, textAlign: 'center' }}>
+            {formatDistance(km, unit)} to Makkah
+            {heading != null ? ` · facing ${Math.round(heading)}°` : ''}
+          </T>
+        </View>
       </View>
 
-      <View style={{ alignSelf: 'center', marginTop: 12, width: size, height: size }}>
-        <View style={{ position: 'absolute', inset: 4, borderRadius: size, borderWidth: 1, borderColor: mintA(aligned ? 0.6 : 0.15) }} />
+      <View style={{ alignSelf: 'center', marginTop: 18, width: globeSize, height: globeSize, opacity: 0.9 }}>
         <Globe
           id="qibla"
           center={mid}
-          size={size}
-          scale={size * 0.467}
+          size={globeSize}
+          scale={globeSize * 0.467}
           route={route}
           overlay={(project) => {
             const [ax, ay] = project(home);
             const [mx, my] = project(MAKKAH);
             return (
               <>
-                <Circle cx={ax} cy={ay} r={10} fill={mintA(0.25)} />
-                <Circle cx={ax} cy={ay} r={5} fill="#fff" />
-                <Circle cx={mx} cy={my} r={14} fill={mintA(0.25)} />
-                <Rect x={mx - 5} y={my - 5} width={10} height={10} fill={SC.mint} />
-                <SvgText x={mx + 14} y={my + 20} fill="#fff" fontSize={13} fontFamily={FONT[600]}>
+                <Circle cx={ax} cy={ay} r={6} fill="#fff" />
+                <Rect x={mx - 4} y={my - 4} width={8} height={8} fill={SC.mint} />
+                <SvgText x={mx + 10} y={my + 4} fill="#fff" fontSize={10} fontFamily={FONT[600]}>
                   Makkah
-                </SvgText>
-                <SvgText x={ax - 12} y={ay + 22} fill="#fff" fontSize={13} fontFamily={FONT[600]} textAnchor="end">
-                  You
                 </SvgText>
               </>
             );
@@ -115,44 +179,79 @@ function QiblaView({ lng, lat, city, heading, size, unit }: { lng: number; lat: 
         />
       </View>
 
-      <View
-        style={[
-          glass,
-          { marginHorizontal: 16, marginTop: 16, paddingVertical: 16, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
-          aligned && { backgroundColor: mintA(0.16), borderColor: mintA(0.5) },
-        ]}>
-        <View style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: aligned ? SC.mint : 'rgba(255,255,255,0.2)' }}>
-          {turn != null && <Needle color="#fff" deg={-turn} />}
-          <Needle color={SC.mint} deg={0} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <T style={{ fontSize: 18, fontWeight: '600' }}>
-            {turn == null ? `Face ${brg}° ${compassWord(brg).toLowerCase()}` : aligned ? 'You’re facing the Qibla' : `Turn ${Math.abs(turn)}° ${turn > 0 ? 'right' : 'left'}`}
-          </T>
-          <T style={{ fontSize: 13, opacity: 0.6 }}>
-            {heading == null ? 'Compass unavailable here. Use the bearing above.' : `You’re facing ${Math.round(heading)}°. Hold flat, away from metal.`}
+      {heading == null && (
+        <View style={[glass, { marginHorizontal: 16, marginTop: 16, padding: 16 }]}>
+          <T style={{ fontSize: 15, fontWeight: '600' }}>Compass unavailable</T>
+          <T style={{ fontSize: 13, opacity: 0.65, marginTop: 4 }}>
+            {Platform.OS === 'web'
+              ? 'Open the app on your phone to use the live compass. Face about '
+              : 'Allow location, then hold the phone flat and away from metal. Face about '}
+            {brg}° {compassWord(brg).toLowerCase()}.
           </T>
         </View>
-      </View>
+      )}
     </Screen>
   );
 }
 
-function Needle({ color, deg }: { color: string; deg: number }) {
-  // 2×22 needle pivoting at its bottom end, which sits at the dial's centre.
+function CompassRose({ size, qiblaDeg, aligned }: { size: number; qiblaDeg: number; aligned: boolean }) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 10;
+  const ticks = Array.from({ length: 72 }, (_, i) => i * 5);
+  const labels: { deg: number; text: string }[] = [
+    { deg: 0, text: 'N' },
+    { deg: 90, text: 'E' },
+    { deg: 180, text: 'S' },
+    { deg: 270, text: 'W' },
+  ];
+  const rad = (deg: number) => ((deg - 90) * Math.PI) / 180;
+  const tipR = r - 8;
+  const qx = cx + tipR * Math.cos(rad(qiblaDeg));
+  const qy = cy + tipR * Math.sin(rad(qiblaDeg));
+  const baseR = 28;
+  const bx = cx + baseR * Math.cos(rad(qiblaDeg));
+  const by = cy + baseR * Math.sin(rad(qiblaDeg));
+
   return (
-    <View
-      style={{
-        position: 'absolute',
-        left: 22,
-        top: 2,
-        width: 2,
-        height: 22,
-        borderRadius: 1,
-        backgroundColor: color,
-        transformOrigin: '1px 22px',
-        transform: [{ rotate: `${deg}deg` }],
-      }}
-    />
+    <>
+      {ticks.map((deg) => {
+        const major = deg % 30 === 0;
+        const inner = major ? r - 14 : r - 8;
+        const a = rad(deg);
+        return (
+          <Line
+            key={deg}
+            x1={cx + inner * Math.cos(a)}
+            y1={cy + inner * Math.sin(a)}
+            x2={cx + r * Math.cos(a)}
+            y2={cy + r * Math.sin(a)}
+            stroke={deg === 0 ? SC.coral : 'rgba(255,255,255,0.35)'}
+            strokeWidth={major ? 2 : 1}
+          />
+        );
+      })}
+      {labels.map(({ deg, text }) => {
+        const a = rad(deg);
+        const lr = r - 28;
+        return (
+          <SvgText
+            key={text}
+            x={cx + lr * Math.cos(a)}
+            y={cy + lr * Math.sin(a) + 5}
+            fill={deg === 0 ? SC.coral : 'rgba(255,255,255,0.75)'}
+            fontSize={deg === 0 ? 18 : 14}
+            fontFamily={FONT[700]}
+            textAnchor="middle">
+            {text}
+          </SvgText>
+        );
+      })}
+      <Path d={`M ${bx} ${by} L ${qx} ${qy}`} stroke={aligned ? SC.mint : SC.lime} strokeWidth={3} strokeLinecap="round" />
+      <Circle cx={qx} cy={qy} r={10} fill={aligned ? SC.mint : SC.lime} />
+      <SvgText x={qx} y={qy + 4} fill={SC.ink} fontSize={9} fontFamily={FONT[700]} textAnchor="middle">
+        Q
+      </SvgText>
+    </>
   );
 }

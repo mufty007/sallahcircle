@@ -67,7 +67,7 @@ export default function SettingsScreen() {
   const setAllowNudges = toggle('nudges', (v) => supabase.from('reminder_settings').upsert({ user_id: me!, allow_nudges: v }));
   const setFasting = toggle('fasting', (v) => supabase.from('reminder_settings').upsert({ user_id: me!, fasting_reminders: v }));
   const setJumuah = toggle('jumuah', (v) => supabase.from('reminder_settings').upsert({ user_id: me!, jumuah_reminder: v }));
-  const setProfileFlag = (key: 'track_excused' | 'track_sunnah') => async (v: boolean) => {
+  const setProfileFlag = (key: 'track_excused' | 'track_sunnah' | 'traveling') => async (v: boolean) => {
     setOverrides((o) => ({ ...o, [key]: v }));
     try {
       await updateProfile({ [key]: v });
@@ -78,6 +78,7 @@ export default function SettingsScreen() {
     }
   };
   const trackExcused = flag('track_excused', profile?.track_excused, false);
+  const traveling = flag('traveling', profile?.traveling, false);
 
   const method = METHODS.find((m) => m.id === profile?.calc_method)?.name ?? '—';
   const groups: [string, Row[]][] = [
@@ -138,6 +139,10 @@ export default function SettingsScreen() {
     [
       'WORSHIP',
       [
+        {
+          label: 'I’m traveling',
+          toggle: { on: traveling, onChange: setProfileFlag('traveling') },
+        },
         { label: 'Track sunnah prayers', toggle: { on: flag('track_sunnah', profile?.track_sunnah, false), onChange: setProfileFlag('track_sunnah') } },
         { label: 'Track excused days', toggle: { on: trackExcused, onChange: setProfileFlag('track_excused') } },
         ...(trackExcused ? [{ label: 'Excused days', value: profile?.paused_since ? 'In progress' : 'Private to you', href: '/excused' as Href }] : []),

@@ -1,8 +1,9 @@
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
-import { glass, hairline, RoundBtn } from '@/components/ui/primitives';
+import { glass, hairline, RoundBtn, Tap } from '@/components/ui/primitives';
 import { BackBar, PageTitle, Screen } from '@/components/ui/screen';
 import { T } from '@/components/ui/text';
 import { isoDate, loadLogs, useNow, useQuery } from '@/lib/data';
@@ -100,8 +101,9 @@ export default function CalendarScreen() {
               const h = days[d - 1]?.hijri;
               const holiday = (h?.holidays?.length ?? 0) > 0;
               return (
-                <View
+                <Tap
                   key={i}
+                  onPress={() => router.push(`/day/${g}` as Href)}
                   style={{
                     flex: 1,
                     height: 56,
@@ -122,7 +124,7 @@ export default function CalendarScreen() {
                         />
                       ))}
                   </View>
-                </View>
+                </Tap>
               );
             })}
           </View>

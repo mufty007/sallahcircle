@@ -158,6 +158,51 @@ export type Database = {
           },
         ]
       }
+      excused_flow_days: {
+        Row: {
+          created_at: string
+          flow: Database["public"]["Enums"]["flow_intensity"]
+          id: string
+          note: string | null
+          on_date: string
+          period_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          flow: Database["public"]["Enums"]["flow_intensity"]
+          id?: string
+          note?: string | null
+          on_date: string
+          period_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          flow?: Database["public"]["Enums"]["flow_intensity"]
+          id?: string
+          note?: string | null
+          on_date?: string
+          period_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "excused_flow_days_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "excused_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "excused_flow_days_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       excused_periods: {
         Row: {
           continued: boolean
@@ -298,18 +343,21 @@ export type Database = {
       prayer_log_details: {
         Row: {
           at_masjid: boolean
+          combined: boolean
           in_jamaah: boolean
           log_id: string
           user_id: string
         }
         Insert: {
           at_masjid?: boolean
+          combined?: boolean
           in_jamaah?: boolean
           log_id: string
           user_id?: string
         }
         Update: {
           at_masjid?: boolean
+          combined?: boolean
           in_jamaah?: boolean
           log_id?: string
           user_id?: string
@@ -417,6 +465,7 @@ export type Database = {
           timezone: string | null
           track_excused: boolean
           track_sunnah: boolean
+          traveling: boolean
           updated_at: string
           username: string | null
         }
@@ -441,6 +490,7 @@ export type Database = {
           timezone?: string | null
           track_excused?: boolean
           track_sunnah?: boolean
+          traveling?: boolean
           updated_at?: string
           username?: string | null
         }
@@ -465,6 +515,7 @@ export type Database = {
           timezone?: string | null
           track_excused?: boolean
           track_sunnah?: boolean
+          traveling?: boolean
           updated_at?: string
           username?: string | null
         }
@@ -784,6 +835,7 @@ export type Database = {
       circle_role: "owner" | "member"
       circle_visibility: "private" | "public"
       excuse_kind: "hayd" | "nifas"
+      flow_intensity: "light" | "medium" | "heavy"
       fast_kind: "ramadan" | "qada" | "sunnah" | "nafl"
       nudge_kind: "nudge" | "dua" | "together" | "voice"
       prayer_name: "fajr" | "dhuhr" | "asr" | "maghrib" | "isha"
@@ -940,6 +992,7 @@ export const Constants = {
       circle_role: ["owner", "member"],
       circle_visibility: ["private", "public"],
       excuse_kind: ["hayd", "nifas"],
+      flow_intensity: ["light", "medium", "heavy"],
       fast_kind: ["ramadan", "qada", "sunnah", "nafl"],
       nudge_kind: ["nudge", "dua", "together", "voice"],
       prayer_name: ["fajr", "dhuhr", "asr", "maghrib", "isha"],

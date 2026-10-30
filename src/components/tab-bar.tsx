@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { InkContext, T } from '@/components/ui/text';
 import { useMyDay } from '@/lib/today';
+import { usePeriodTheme } from '@/state/period-theme';
 import { SC } from '@/theme/colors';
 
 const ITEMS: Record<string, [IconName, string]> = {
@@ -14,17 +15,19 @@ const ITEMS: Record<string, [IconName, string]> = {
   qibla: ['compass', 'Qibla'],
   circles: ['users', 'Circles'],
   board: ['trophy', 'Board'],
-  me: ['user', 'Me'],
+  more: ['more', 'More'],
 };
 
 /** Floating glass pill tab bar from the design. Goes light on the daytime Today sky. */
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { dark: skyDark } = useMyDay(60_000);
+  const period = usePeriodTheme();
   const activeName = state.routes[state.index]?.name;
-  const dark = activeName !== 'index' || skyDark;
+  const dark = activeName !== 'index' || skyDark || period.active;
   const bg = dark ? 'rgba(8,12,28,0.62)' : 'rgba(255,255,255,0.78)';
   const fg = dark ? 'rgba(255,255,255,0.7)' : 'rgba(11,18,32,0.6)';
+  const pill = period.active ? SC.lilac : SC.mint;
 
   return (
     <View
@@ -56,7 +59,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
                   layout={LinearTransition.springify().damping(18)}
                   style={
                     focused
-                      ? { flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 16, borderRadius: 24, backgroundColor: SC.mint }
+                      ? { flexDirection: 'row', alignItems: 'center', gap: 8, height: 48, paddingHorizontal: 16, borderRadius: 24, backgroundColor: pill }
                       : { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }
                   }>
                   {focused ? (

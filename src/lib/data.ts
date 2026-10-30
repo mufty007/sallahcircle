@@ -232,7 +232,14 @@ export async function loadLogs(userIds: string[], since: string): Promise<LogRow
   return data ?? [];
 }
 
-export async function logPrayer(input: { prayer: PrayerKey; prayedOn: string; status: Enums<'prayer_status'>; inJamaah: boolean; atMasjid: boolean }) {
+export async function logPrayer(input: {
+  prayer: PrayerKey;
+  prayedOn: string;
+  status: Enums<'prayer_status'>;
+  inJamaah: boolean;
+  atMasjid: boolean;
+  combined?: boolean;
+}) {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) throw new Error('Not signed in');
   const { data: log, error } = await supabase
@@ -246,14 +253,25 @@ export async function logPrayer(input: { prayer: PrayerKey; prayedOn: string; st
     .single();
   if (error) throw error;
   // Private details (owner-only table; circle-mates never see these).
-  const { error: e2 } = await supabase
-    .from('prayer_log_details')
-    .upsert({ log_id: log.id, user_id: auth.user.id, in_jamaah: input.inJamaah, at_masjid: input.atMasjid });
+  const { error: e2 } = await supabase.from('prayer_log_details').upsert({
+    log_id: log.id,
+    user_id: auth.user.id,
+    in_jamaah: input.inJamaah,
+    at_masjid: input.atMasjid,
+    combined: input.combined ?? false,
+  });
   if (e2) throw e2;
   invalidate();
 }
 
-export type MyLog = { id: string; status: Enums<'prayer_status'>; inJamaah: boolean; atMasjid: boolean; sunnah: SunnahKind[] };
+export type MyLog = {
+  id: string;
+  status: Enums<'prayer_status'>;
+  inJamaah: boolean;
+  atMasjid: boolean;
+  combined: boolean;
+  sunnah: SunnahKind[];
+};
 
 /** Your own log for one prayer (with its private details), or null if not logged yet. */
 export async function loadMyLog(userId: string, prayer: PrayerKey, prayedOn: string): Promise<MyLog | null> {
@@ -266,9 +284,52 @@ export async function loadMyLog(userId: string, prayer: PrayerKey, prayedOn: str
   const mine = new Set(SUNNAH_FOR[prayer].map((x) => x.kind));
   const sunnah = (sun.data ?? []).map((r) => r.kind).filter((k) => mine.has(k));
   if (!log.data) return null;
-  const { data: d, error } = await supabase.from('prayer_log_details').select('in_jamaah, at_masjid').eq('log_id', log.data.id).maybeSingle();
+  const { data: d, error } = await supabase.from('prayer_log_details').select('in_jamaah, at_masjid, combined').eq('log_id', log.data.id).maybeSingle();
   if (error) throw error;
-  return { id: log.data.id, status: log.data.status, inJamaah: d?.in_jamaah ?? false, atMasjid: d?.at_masjid ?? false, sunnah };
+  return {
+    id: log.data.id,
+    status: log.data.status,
+    inJamaah: d?.in_jamaah ?? false,
+    atMasjid: d?.at_masjid ?? false,
+    combined: d?.combined ?? false,
+    sunnah,
+  };
+}
+
+/** All five prayers for one day with private details (owner-only). */
+export async function loadMyDayLogs(userId: string, prayedOn: string): Promise<Partial<Record<PrayerKey, MyLog>>> {
+  const [logs, sun] = await Promise.all([
+    supabase.from('prayer_logs').select('id, prayer, status').eq('user_id', userId).eq('prayed_on', prayedOn),
+    supabase.from('sunnah_logs').select('kind').eq('user_id', userId).eq('prayed_on', prayedOn),
+  ]);
+  if (logs.error) throw logs.error;
+  if (sun.error) throw sun.error;
+  const rows = logs.data ?? [];
+  if (!rows.length) return {};
+  const { data: details, error } = await supabase
+    .from('prayer_log_details')
+    .select('log_id, in_jamaah, at_masjid, combined')
+    .in(
+      'log_id',
+      rows.map((r) => r.id),
+    );
+  if (error) throw error;
+  const byLog = new Map((details ?? []).map((d) => [d.log_id, d]));
+  const out: Partial<Record<PrayerKey, MyLog>> = {};
+  for (const r of rows) {
+    const prayer = r.prayer as PrayerKey;
+    const d = byLog.get(r.id);
+    const mine = new Set(SUNNAH_FOR[prayer].map((x) => x.kind));
+    out[prayer] = {
+      id: r.id,
+      status: r.status,
+      inJamaah: d?.in_jamaah ?? false,
+      atMasjid: d?.at_masjid ?? false,
+      combined: d?.combined ?? false,
+      sunnah: (sun.data ?? []).map((s) => s.kind).filter((k) => mine.has(k)),
+    };
+  }
+  return out;
 }
 
 /** Remove a log (its private details cascade). */
@@ -395,6 +456,54 @@ export async function deleteExcused(id: string) {
   const { error } = await supabase.from('excused_periods').delete().eq('id', id);
   if (error) throw error;
   invalidate();
+}
+
+export type FlowDay = {
+  id: string;
+  periodId: string;
+  onDate: string;
+  flow: Enums<'flow_intensity'>;
+  note: string | null;
+};
+
+export async function loadFlowDays(userId: string): Promise<FlowDay[]> {
+  const { data, error } = await supabase
+    .from('excused_flow_days')
+    .select('id, period_id, on_date, flow, note')
+    .eq('user_id', userId)
+    .order('on_date', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    periodId: r.period_id,
+    onDate: r.on_date,
+    flow: r.flow,
+    note: r.note,
+  }));
+}
+
+export function useFlowDays(userId: string | undefined, enabled: boolean) {
+  return useQuery(userId && enabled ? `flow:${userId}` : null, () => loadFlowDays(userId!));
+}
+
+export async function upsertFlowDay(periodId: string, onDate: string, flow: Enums<'flow_intensity'>, note?: string | null) {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error('Not signed in');
+  const { error } = await supabase.from('excused_flow_days').upsert(
+    { period_id: periodId, user_id: auth.user.id, on_date: onDate, flow, note: note ?? null },
+    { onConflict: 'period_id,on_date' },
+  );
+  if (error) throw error;
+  invalidate();
+}
+
+/** Simple distribution for UI bars. */
+export function flowStats(days: FlowDay[] | null | undefined) {
+  const counts = { light: 0, medium: 0, heavy: 0 };
+  for (const d of days ?? []) counts[d.flow]++;
+  const total = counts.light + counts.medium + counts.heavy;
+  return { ...counts, total };
 }
 
 // ─── Member schedules ──────────────────────────────────────────

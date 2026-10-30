@@ -14,8 +14,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import '@/lib/background';
 import { AppStateProvider } from '@/state/app-state';
+import { PeriodThemeProvider } from '@/state/period-theme';
 import { SessionProvider } from '@/state/session';
 import { SC } from '@/theme/colors';
+import { TasbeehFab } from '@/components/tasbeeh-fab';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -43,6 +45,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: SC.navy }}>
       <ThemeProvider value={theme}>
         <SessionProvider>
+        <PeriodThemeProvider>
         <AppStateProvider>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: SC.navy } }}>
             <Stack.Screen name="(tabs)" />
@@ -52,7 +55,9 @@ export default function RootLayout() {
             <Stack.Screen name="report" options={sheet} />
             <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
           </Stack>
+          <TasbeehFab />
         </AppStateProvider>
+        </PeriodThemeProvider>
         </SessionProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

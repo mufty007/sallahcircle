@@ -2,16 +2,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { INNER, MEMBER_WASH, SC, SKY, type Gradient, type Period } from '@/theme/colors';
+import { INNER, MEMBER_WASH, PERIOD_INNER, PERIOD_SKY, SC, SKY, type Gradient, type Period } from '@/theme/colors';
 
-export type BgKind = Period | 'navy' | 'inner' | 'member' | 'onboard';
+export type BgKind = Period | 'navy' | 'inner' | 'member' | 'onboard' | 'period' | 'period-inner';
 
 /** Full-bleed screen background matching the design's gradients. */
 export function Background({ kind }: { kind: BgKind }) {
   if (kind === 'navy') return <View style={[StyleSheet.absoluteFill, { backgroundColor: SC.navy }]} />;
   if (kind === 'onboard') return <OnboardGlow />;
-  if (kind === 'inner' || kind === 'member') {
-    const g = kind === 'inner' ? INNER : MEMBER_WASH;
+  if (kind === 'period') return <Sky g={PERIOD_SKY} />;
+  if (kind === 'period-inner' || kind === 'inner' || kind === 'member') {
+    const g = kind === 'period-inner' ? PERIOD_INNER : kind === 'inner' ? INNER : MEMBER_WASH;
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: SC.navy }]}>
         <LinearGradient colors={g.colors} locations={g.locations} style={{ height: g.height }} />
