@@ -40,15 +40,27 @@ export function Screen({ bg, children, decor, header, footer, scroll = true, dar
   const footerH = useRef(0);
 
   // Scroll the focused input above the keyboard (and the footer, which rides on top of it).
+  // Optional APIs — skip quietly when missing (common on web / incomplete RN shims).
   const reveal = useCallback(() => {
-    const input = TextInput.State.currentlyFocusedInput();
-    const metrics = Keyboard.metrics();
-    if (!input || !metrics || !scrollRef.current) return;
-    input.measureInWindow((_x, y, _w, h) => {
-      const visibleBottom = metrics.screenY - footerH.current - KEYBOARD_GAP;
-      const overlap = y + h - visibleBottom;
-      if (overlap > 0) scrollRef.current?.scrollTo({ y: scrollY.current + overlap, animated: true });
-    });
+    if (!scrollRef.current) return;
+    try {
+      if (typeof Keyboard.metrics !== 'function') return;
+      const metrics = Keyboard.metrics();
+      if (!metrics) return;
+
+      const getFocused = TextInput.State?.currentlyFocusedInput;
+      if (typeof getFocused !== 'function') return;
+      const input = getFocused() as { measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void } | null;
+      if (!input || typeof input.measureInWindow !== 'function') return;
+
+      input.measureInWindow((_x, y, _w, h) => {
+        const visibleBottom = metrics.screenY - footerH.current - KEYBOARD_GAP;
+        const overlap = y + h - visibleBottom;
+        if (overlap > 0) scrollRef.current?.scrollTo({ y: scrollY.current + overlap, animated: true });
+      });
+    } catch {
+      // KeyboardAvoidingView still pads; skip custom scroll if these APIs are unavailable.
+    }
   }, []);
 
   useFocusEffect(
